@@ -114,7 +114,7 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
 
 # ===== Gradio 界面 =====
 
-with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="论文多视角审稿助手") as demo:
     gr.Markdown("""
     # 📝 论文多视角审稿助手
 
@@ -169,10 +169,9 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
 
     # 下方：完整报告复制框 + 导出下载
     full_text_box = gr.Textbox(
-        label="📋 完整审稿报告（可全选复制，或点击右上角复制按钮）",
+        label="📋 完整审稿报告（可全选复制）",
         lines=20,
         interactive=False,
-        show_copy_button=True,
     )
     with gr.Row():
         export_file = gr.File(label="📥 导出审稿报告（Markdown，审稿完成后可下载）", interactive=False)
@@ -193,4 +192,7 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
 
 
 if __name__ == "__main__":
-    demo.launch(share=False, server_name="0.0.0.0", server_port=7860)
+    demo.launch(share=False, server_name="0.0.0.0", server_port=7860, theme=gr.themes.Soft())
+
+
+
