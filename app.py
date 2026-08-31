@@ -7,7 +7,10 @@ from debate_agent import run_debate, format_debate_result
 from debate_agent.state import DebateState
 
 
-def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirmative_stance: str, negative_stance: str, rag_enabled: bool, aff_evidence_paths: str, neg_evidence_paths: str, web_search_enabled: bool, progress=gr.Progress()):
+def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
+                  affirmative_stance: str, negative_stance: str,
+                  rag_enabled: bool, aff_evidence_files, neg_evidence_files,
+                  web_search_enabled: bool, progress=gr.Progress()):
     """
     Gradio 界面的辩论运行函数
     使用 progress 实时展示辩论进度
@@ -20,14 +23,21 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirma
     aff_stance = affirmative_stance.strip() if affirmative_stance and affirmative_stance.strip() else None
     neg_stance = negative_stance.strip() if negative_stance and negative_stance.strip() else None
 
-    # V2 RAG：解析论据文件路径（多个文件用逗号或换行分隔）
+    # V2 RAG：处理上传的论据文件
     aff_files = []
     neg_files = []
     if rag_enabled:
-        if aff_evidence_paths and aff_evidence_paths.strip():
-            aff_files = [p.strip() for p in aff_evidence_paths.replace('\n', ',').split(',') if p.strip()]
-        if neg_evidence_paths and neg_evidence_paths.strip():
-            neg_files = [p.strip() for p in neg_evidence_paths.replace('\n', ',').split(',') if p.strip()]
+        # gr.File 上传多个文件时返回路径列表，单个文件返回字符串
+        if aff_evidence_files:
+            if isinstance(aff_evidence_files, list):
+                aff_files = [f if isinstance(f, str) else f.name for f in aff_evidence_files]
+            else:
+                aff_files = [aff_evidence_files if isinstance(aff_evidence_files, str) else aff_evidence_files.name]
+        if neg_evidence_files:
+            if isinstance(neg_evidence_files, list):
+                neg_files = [f if isinstance(f, str) else f.name for f in neg_evidence_files]
+            else:
+                neg_files = [neg_evidence_files if isinstance(neg_evidence_files, str) else neg_evidence_files.name]
         print(f"[V2 RAG] 正方论据文件: {aff_files}")
         print(f"[V2 RAG] 反方论据文件: {neg_files}")
 
@@ -132,88 +142,84 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
     核心算法亮点：**Self-Reflection 自我反思机制** —— 每轮攻辩后，双方 Agent 会批判自己之前的论证，找出漏洞并在下一轮修正。
     """)
 
-    with gr.Row():
-        with gr.Column(scale=1):
-            topic_input = gr.Textbox(
-                label="辩题",
-                placeholder="例如：AI 会不会取代程序员？\n猫和狗谁更适合当宠物？\n年轻人应不应该躺平？",
-                lines=3,
-                value="AI 会不会取代程序员？",
+    # ===== 输入区（紧凑排列） =====
+    with gr.Group():
+        topic_input = gr.Textbox(
+            label="辩题",
+            placeholder="例如：AI 会不会取代程序员？\n猫和狗谁更适合当宠物？\n年轻人应不应该躺平？",
+            lines=2,
+            value="AI 会不会取代程序员？",
+        )
+        with gr.Row():
+            affirmative_stance_input = gr.Textbox(
+                label="正方立场（选填，建议填写防跑偏）",
+                placeholder="例如：AI会取代程序员",
+                lines=1,
             )
-            with gr.Row():
-                affirmative_stance_input = gr.Textbox(
-                    label="正方立场（选填，强烈建议填写，防止立场跑偏）",
-                    placeholder="例如：AI会取代程序员 / 猫更适合当宠物",
-                    lines=1,
-                )
-                negative_stance_input = gr.Textbox(
-                    label="反方立场（选填，强烈建议填写，防止立场跑偏）",
-                    placeholder="例如：AI不会取代程序员 / 狗更适合当宠物",
-                    lines=1,
-                )
+            negative_stance_input = gr.Textbox(
+                label="反方立场（选填，建议填写防跑偏）",
+                placeholder="例如：AI不会取代程序员",
+                lines=1,
+            )
+        with gr.Row():
             rounds_slider = gr.Slider(
                 minimum=1, maximum=5, value=3, step=1,
-                label="攻辩轮数（轮数越多辩论越精彩，但耗时越长）",
+                label="攻辩轮数",
             )
             reflection_checkbox = gr.Checkbox(
                 value=True,
-                label="启用自我反思机制（Self-Reflection）✅ 推荐开启",
+                label="自我反思（推荐）",
+            )
+            web_search_checkbox = gr.Checkbox(
+                value=False,
+                label="联网检索（V3 Tavily）",
             )
             rag_checkbox = gr.Checkbox(
                 value=False,
-                label="启用 RAG 论据检索（V2，需配置 embedding API）",
+                label="离线论据检索（V2 RAG）",
             )
-            with gr.Row(visible=False) as rag_config:
-                aff_evidence_input = gr.Textbox(
-                    label="正方论据文件路径（多个用逗号分隔，支持 .txt/.md）",
-                    placeholder="例如：data/aff_evidence1.txt, data/aff_evidence2.md",
-                    lines=2,
-                )
-                neg_evidence_input = gr.Textbox(
-                    label="反方论据文件路径（多个用逗号分隔，支持 .txt/.md）",
-                    placeholder="例如：data/neg_evidence1.txt, data/neg_evidence2.md",
-                    lines=2,
-                )
-            # RAG 开关控制配置区域显示
-            rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
 
-            web_search_checkbox = gr.Checkbox(
-                value=False,
-                label="启用 Tavily 联网检索（V3，实时搜索最新论据，需配置 TAVILY_API_KEY）",
+        # RAG 文件上传（默认隐藏，勾选后显示）
+        with gr.Row(visible=False) as rag_config:
+            aff_evidence_input = gr.File(
+                label="📄 正方论据文件（可多选，支持 .txt/.md）",
+                file_count="multiple",
+                file_types=[".txt", ".md"],
             )
+            neg_evidence_input = gr.File(
+                label="📄 反方论据文件（可多选，支持 .txt/.md）",
+                file_count="multiple",
+                file_types=[".txt", ".md"],
+            )
+        rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
+
+        with gr.Row():
             run_button = gr.Button("🚀 开始辩论", variant="primary", size="lg")
+            status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False, scale=2)
 
-            status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False)
-
-        with gr.Column(scale=2):
-            with gr.Tabs():
-                with gr.Tab("📜 辩论实录"):
-                    transcript_md = gr.Markdown("辩论开始后这里会实时展示双方发言...")
-                with gr.Tab("📊 评分结果"):
-                    score_md = gr.Markdown("评分结果会在辩论结束后展示...")
-
+    # ===== 输出区 =====
     with gr.Row():
-        full_text_box = gr.Textbox(label="完整辩论记录（可全选复制）", lines=8, interactive=False)
+        with gr.Column(scale=3):
+            transcript_md = gr.Markdown("辩论开始后这里会实时展示双方发言...", label="📜 辩论实录")
+        with gr.Column(scale=2):
+            score_md = gr.Markdown("评分结果会在辩论结束后展示...", label="📊 评分结果")
+
+    full_text_box = gr.Textbox(label="完整辩论记录（可全选复制）", lines=6, interactive=False)
 
     # 事件绑定
     run_button.click(
         fn=run_debate_ui,
-        inputs=[topic_input, rounds_slider, reflection_checkbox, affirmative_stance_input, negative_stance_input, rag_checkbox, aff_evidence_input, neg_evidence_input, web_search_checkbox],
+        inputs=[topic_input, rounds_slider, reflection_checkbox,
+                affirmative_stance_input, negative_stance_input,
+                rag_checkbox, aff_evidence_input, neg_evidence_input,
+                web_search_checkbox],
         outputs=[transcript_md, score_md, full_text_box, status_text],
     )
 
+    # 页脚
     gr.Markdown("""
     ---
-    **技术栈**：LangGraph（多 Agent 编排）| LangChain | OpenAI 兼容 API（DeepSeek / Qwen / GPT）| Gradio
-
-    **项目结构**：
-    - `debate_agent/state.py` — 辩论状态定义
-    - `debate_agent/prompts.py` — Prompt 模板（立论/攻辩/反思/驳论/总结/评分）
-    - `debate_agent/debater.py` — 辩手 Agent
-    - `debate_agent/judge.py` — 评委 Agent
-    - `debate_agent/nodes.py` — LangGraph 图节点
-    - `debate_agent/graph.py` — 辩论图构建与运行
-    - `app.py` — Gradio 界面
+    <sub>**技术栈**：LangGraph · LangChain · OpenAI 兼容 API（智谱 GLM / DeepSeek / GPT）· FAISS · Tavily · Gradio</sub>
     """)
 
 
