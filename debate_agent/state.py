@@ -1,118 +1,82 @@
-"""辩论系统状态定义"""
+"""论文多视角审稿助手状态定义（多Agent并行评审架构）"""
 from typing import TypedDict, List, Optional, Dict, Any
 from enum import Enum
 
 
-class DebatePhase(str, Enum):
-    """辩论阶段"""
-    OPENING = "opening"           # 立论
-    CLASH = "clash"               # 攻辩（多轮）
-    REBUTTAL = "rebuttal"         # 驳论
-    CLOSING = "closing"           # 总结
-    JUDGING = "judging"           # 评委评分
-    DONE = "done"                  # 结束
+class ReviewPhase(str, Enum):
+    """审稿阶段"""
+    REVIEWING = "reviewing"        # 4个审稿人并行评审
+    REFLECTING = "reflecting"      # 自我反思修正
+    SUMMARIZING = "summarizing"    # 主编汇总
+    DONE = "done"                   # 结束
 
 
-class DebateState(TypedDict):
+class ReviewState(TypedDict):
     """
-    辩论全局状态
+    审稿全局状态
     LangGraph 中所有节点共享这个 state dict
     """
     # ===== 基本信息 =====
-    topic: str                          # 辩题
-    affirmative_stance: str             # 正方立场的明确表述（如"AI会取代程序员"）
-    negative_stance: str                # 反方立场的明确表述（如"AI不会取代程序员"）
-    max_rounds: int                     # 最大攻辩轮数
-    current_round: int                  # 当前攻辩轮次
-    phase: DebatePhase                  # 当前阶段
-    current_speaker: str                # 当前发言方 "affirmative" / "negative" / "judge"
+    topic: str                          # 论文内容
+    reflection_enabled: bool            # 是否启用自我反思机制
 
-    # ===== 辩论历史 =====
-    affirmative_opening: Optional[str]  # 正方立论
-    negative_opening: Optional[str]     # 反方立论
-    affirmative_clashes: List[str]      # 正方各轮攻辩发言
-    negative_clashes: List[str]         # 反方各轮攻辩发言
-    affirmative_rebuttal: Optional[str] # 正方驳论
-    negative_rebuttal: Optional[str]    # 反方驳论
-    affirmative_closing: Optional[str]   # 正方总结
-    negative_closing: Optional[str]      # 反方总结
+    # ===== 4个维度审稿意见（初审）=====
+    innovation_review: Optional[str]    # 创新性审稿意见
+    methodology_review: Optional[str]   # 方法论审稿意见
+    experiment_review: Optional[str]    # 实验审稿意见（含可复现性）
+    writing_review: Optional[str]       # 写作审稿意见
 
-    # ===== Reflection 机制 =====
-    affirmative_reflection: Optional[str]  # 正方自我反思
-    negative_reflection: Optional[str]     # 反方自我反思
-    reflection_enabled: bool                # 是否启用自我反思
+    # ===== 4个维度审稿意见（反思修正后，最终版）=====
+    innovation_final: Optional[str]     # 创新性最终审稿意见
+    methodology_final: Optional[str]    # 方法论最终审稿意见
+    experiment_final: Optional[str]     # 实验最终审稿意见
+    writing_final: Optional[str]        # 写作最终审稿意见
 
-    # ===== V1.5 记忆摘要压缩 =====
-    affirmative_summary: Optional[str]     # 正方历史发言摘要（久远轮次压缩后）
-    negative_summary: Optional[str]        # 反方历史发言摘要
-    summary_enabled: bool                   # 是否启用记忆摘要压缩
-    summary_threshold: int                  # 超过多少轮后开始摘要（默认2，即第3轮开始对第1轮做摘要）
+    # ===== 主编汇总 =====
+    editor_summary: Optional[str]        # 主编综合审稿报告
 
-    # ===== V2 RAG 论据检索 =====
-    rag_enabled: bool                       # 是否启用 RAG 论据检索
-
-    # ===== V3 联网检索 =====
-    web_search_enabled: bool                # 是否启用 Tavily 联网检索
-
-    # ===== 评委评分 =====
-    judge_score: Optional[Dict[str, Any]]  # 评委评分结果
-    winner: Optional[str]                    # 获胜方
+    # ===== 增强功能（后续实现）=====
+    rag_enabled: bool                    # 是否启用 RAG 参考文献检索
+    web_search_enabled: bool             # 是否启用 Tavily 联网检索
+    paper_structure: Optional[Dict[str, str]]  # 论文结构解析结果（后续实现）
 
     # ===== 系统 =====
-    error: Optional[str]                     # 错误信息
-    full_transcript: List[Dict[str, str]]   # 完整对话记录 [{speaker, role, content}]
+    phase: ReviewPhase                   # 当前阶段
+    error: Optional[str]                 # 错误信息
+    full_transcript: List[Dict[str, str]]  # 完整记录 [{reviewer, role, content}]
 
 
 def init_state(
     topic: str,
-    max_rounds: int = 3,
     reflection_enabled: bool = True,
-    affirmative_stance: str = None,
-    negative_stance: str = None,
-    summary_enabled: bool = True,
-    summary_threshold: int = 2,
     rag_enabled: bool = False,
     web_search_enabled: bool = False,
-) -> DebateState:
+) -> ReviewState:
     """
-    初始化辩论状态
+    初始化审稿状态
 
     Args:
-        topic: 辩题
-        max_rounds: 最大攻辩轮数
-        reflection_enabled: 是否启用自我反思
-        affirmative_stance: 正方立场的明确表述（如"猫更适合当宠物"），不填则默认"支持本辩题"
-        negative_stance: 反方立场的明确表述（如"狗更适合当宠物"），不填则默认"反对本辩题"
-        summary_enabled: 是否启用记忆摘要压缩（V1.5）
-        summary_threshold: 超过多少轮后开始摘要（默认2，即第3轮开始对第1轮做摘要）
+        topic: 论文内容
+        reflection_enabled: 是否启用自我反思机制
+        rag_enabled: 是否启用 RAG 参考文献检索
+        web_search_enabled: 是否启用 Tavily 联网检索
     """
     return {
         "topic": topic,
-        "affirmative_stance": affirmative_stance or "支持本辩题的立场",
-        "negative_stance": negative_stance or "反对本辩题的立场",
-        "max_rounds": max_rounds,
-        "current_round": 0,
-        "phase": DebatePhase.OPENING,
-        "current_speaker": "affirmative",
-        "affirmative_opening": None,
-        "negative_opening": None,
-        "affirmative_clashes": [],
-        "negative_clashes": [],
-        "affirmative_rebuttal": None,
-        "negative_rebuttal": None,
-        "affirmative_closing": None,
-        "negative_closing": None,
-        "affirmative_reflection": None,
-        "negative_reflection": None,
         "reflection_enabled": reflection_enabled,
-        "affirmative_summary": None,
-        "negative_summary": None,
-        "summary_enabled": summary_enabled,
-        "summary_threshold": summary_threshold,
+        "innovation_review": None,
+        "methodology_review": None,
+        "experiment_review": None,
+        "writing_review": None,
+        "innovation_final": None,
+        "methodology_final": None,
+        "experiment_final": None,
+        "writing_final": None,
+        "editor_summary": None,
         "rag_enabled": rag_enabled,
         "web_search_enabled": web_search_enabled,
-        "judge_score": None,
-        "winner": None,
+        "paper_structure": None,
+        "phase": ReviewPhase.REVIEWING,
         "error": None,
         "full_transcript": [],
     }
