@@ -51,6 +51,9 @@ class DebateState(TypedDict):
     # ===== V2 RAG 论据检索 =====
     rag_enabled: bool                       # 是否启用 RAG 论据检索
 
+    # ===== V3 联网检索 =====
+    web_search_enabled: bool                # 是否启用 Tavily 联网检索
+
     # ===== 评委评分 =====
     judge_score: Optional[Dict[str, Any]]  # 评委评分结果
     winner: Optional[str]                    # 获胜方
@@ -69,6 +72,7 @@ def init_state(
     summary_enabled: bool = True,
     summary_threshold: int = 2,
     rag_enabled: bool = False,
+    web_search_enabled: bool = False,
 ) -> DebateState:
     """
     初始化辩论状态
@@ -106,6 +110,7 @@ def init_state(
         "summary_enabled": summary_enabled,
         "summary_threshold": summary_threshold,
         "rag_enabled": rag_enabled,
+        "web_search_enabled": web_search_enabled,
         "judge_score": None,
         "winner": None,
         "error": None,

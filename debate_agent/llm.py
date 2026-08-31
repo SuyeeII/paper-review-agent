@@ -1,5 +1,5 @@
 """LLM 客户端封装
-支持 DeepSeek / OpenAI 等兼容 OpenAI 接口的模型
+支持 智谱GLM / OpenAI / DeepSeek 等兼容 OpenAI 接口的模型
 V1.5 新增：超时控制 + 指数退避重试，解决 API 调用卡死问题
 """
 import os
@@ -24,10 +24,10 @@ class LLMClient:
         timeout: int = 120,
         max_retries: int = 3,
     ):
-        # 优先用传入参数，其次用环境变量
-        self.api_key = api_key or os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL")
-        self.model = model or os.getenv("DEEPSEEK_MODEL") or os.getenv("OPENAI_MODEL") or "deepseek-chat"
+        # 优先用传入参数，其次用环境变量（智谱GLM优先，兼容旧DEEPSEEK变量名，最后OpenAI）
+        self.api_key = api_key or os.getenv("ZHIPU_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
+        self.base_url = base_url or os.getenv("ZHIPU_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        self.model = model or os.getenv("ZHIPU_MODEL") or os.getenv("DEEPSEEK_MODEL") or os.getenv("OPENAI_MODEL") or "glm-4-flash"
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.timeout = timeout          # 单次调用超时（秒）
@@ -35,7 +35,7 @@ class LLMClient:
 
         if not self.api_key:
             raise ValueError(
-                "未找到 API Key。请在 .env 文件中设置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY，"
+                "未找到 API Key。请在 .env 文件中设置 ZHIPU_API_KEY 或 OPENAI_API_KEY，"
                 "或者在初始化 LLMClient 时传入 api_key 参数。"
             )
 

@@ -7,7 +7,7 @@ from debate_agent import run_debate, format_debate_result
 from debate_agent.state import DebateState
 
 
-def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirmative_stance: str, negative_stance: str, rag_enabled: bool, aff_evidence_paths: str, neg_evidence_paths: str, progress=gr.Progress()):
+def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirmative_stance: str, negative_stance: str, rag_enabled: bool, aff_evidence_paths: str, neg_evidence_paths: str, web_search_enabled: bool, progress=gr.Progress()):
     """
     Gradio 界面的辩论运行函数
     使用 progress 实时展示辩论进度
@@ -80,6 +80,7 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirma
             rag_enabled=rag_enabled,
             affirmative_evidence_files=aff_files if rag_enabled else None,
             negative_evidence_files=neg_files if rag_enabled else None,
+            web_search_enabled=web_search_enabled,
         )
     except Exception as e:
         error_msg = f"❌ 辩论运行出错：{str(e)}"
@@ -175,6 +176,11 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
                 )
             # RAG 开关控制配置区域显示
             rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
+
+            web_search_checkbox = gr.Checkbox(
+                value=False,
+                label="启用 Tavily 联网检索（V3，实时搜索最新论据，需配置 TAVILY_API_KEY）",
+            )
             run_button = gr.Button("🚀 开始辩论", variant="primary", size="lg")
 
             status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False)
@@ -192,7 +198,7 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
     # 事件绑定
     run_button.click(
         fn=run_debate_ui,
-        inputs=[topic_input, rounds_slider, reflection_checkbox, affirmative_stance_input, negative_stance_input, rag_checkbox, aff_evidence_input, neg_evidence_input],
+        inputs=[topic_input, rounds_slider, reflection_checkbox, affirmative_stance_input, negative_stance_input, rag_checkbox, aff_evidence_input, neg_evidence_input, web_search_checkbox],
         outputs=[transcript_md, score_md, full_text_box, status_text],
     )
 

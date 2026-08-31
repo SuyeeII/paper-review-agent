@@ -1,11 +1,13 @@
 """辩手 Agent
 实现立论、攻辩、自我反思、驳论、总结五个阶段
 V2 新增：RAG 论据检索，在发言前检索知识库中的真实论据注入 prompt
+V3 新增：Tavily 联网检索，在发言前实时搜索最新论据注入 prompt
 """
 from typing import List, Optional
 from .llm import get_llm
 from . import prompts
 from .rag import KnowledgeBase, format_evidence_for_prompt
+from .web_search import TavilySearch, format_search_results_for_prompt
 
 
 class DebaterAgent:
@@ -26,6 +28,10 @@ class DebaterAgent:
         self.own_speeches: List[str] = []
         # V2 RAG 论据知识库（由外部设置，为 None 时不启用检索）
         self.evidence_kb: Optional[KnowledgeBase] = None
+        # V3 Tavily 联网检索（由外部设置，为 None 时不启用联网搜索）
+        self.web_search: Optional[TavilySearch] = None
+        # 辩题（联网检索时用）
+        self.topic: str = ""
 
     def retrieve_evidence(self, query: str, top_k: int = 3) -> str:
         """
@@ -40,13 +46,37 @@ class DebaterAgent:
             return ""
         return format_evidence_for_prompt(evidences, self.side_name)
 
+    def retrieve_web_evidence(self, opponent_argument: str = None, max_results: int = 4) -> str:
+        """
+        V3 联网检索论据
+        用 Tavily 实时搜索支持己方立场的论据，格式化为 prompt 可用的文本
+        如果联网检索不可用，返回空字符串
+        """
+        if self.web_search is None or not self.web_search.is_available():
+            return ""
+        results = self.web_search.search_for_debate(
+            topic=self.topic,
+            stance=self.side,
+            stance_detail=self.stance_detail,
+            opponent_argument=opponent_argument,
+            max_results=max_results,
+        )
+        if not results:
+            return ""
+        return format_search_results_for_prompt(results, self.side)
+
     def opening(self, topic: str) -> str:
         """立论陈词"""
+        self.topic = topic  # V3: 保存辩题，联网检索时用
         prompt = prompts.get_opening_prompt(topic, self.side, self.stance_detail)
         # V2 RAG：检索论据注入 prompt
         evidence = self.retrieve_evidence(topic, top_k=3)
+        # V3 联网检索：实时搜索论据注入 prompt
+        web_evidence = self.retrieve_web_evidence(max_results=4)
         if evidence:
             prompt = prompt + "\n\n" + evidence
+        if web_evidence:
+            prompt = prompt + "\n\n" + web_evidence
         system = (
             f"你是一场辩论赛的{self.side_name}一辩，思维缜密，善于论证。"
             f"你的立场极其坚定，绝不妥协，绝不认同对方观点。"
@@ -74,8 +104,12 @@ class DebaterAgent:
         )
         # V2 RAG：检索论据注入 prompt（用辩题+对方上轮论点作为查询）
         evidence = self.retrieve_evidence(f"{topic} {opponent_previous[:200]}", top_k=3)
+        # V3 联网检索：用对方论点做查询，搜索反驳素材
+        web_evidence = self.retrieve_web_evidence(opponent_argument=opponent_previous, max_results=4)
         if evidence:
             prompt = prompt + "\n\n" + evidence
+        if web_evidence:
+            prompt = prompt + "\n\n" + web_evidence
         system = (
             f"你是辩论赛的{self.side_name}，反应敏捷，善于抓住对方漏洞进行反驳。"
             f"你的立场绝对坚定，绝不动摇。你的任务是摧毁对方论证，不是被对方说服。"
@@ -116,8 +150,12 @@ class DebaterAgent:
         prompt = prompts.get_rebuttal_prompt(topic, self.side, self.stance_detail, own_speeches, all_opponent_speeches, reflection)
         # V2 RAG：检索论据注入 prompt
         evidence = self.retrieve_evidence(topic, top_k=4)
+        # V3 联网检索
+        web_evidence = self.retrieve_web_evidence(max_results=4)
         if evidence:
             prompt = prompt + "\n\n" + evidence
+        if web_evidence:
+            prompt = prompt + "\n\n" + web_evidence
         system = (
             f"你是辩论赛的{self.side_name}，善于系统性地反驳对方论点。"
             f"你的立场坚如磐石，绝不动摇。你的目标是彻底摧毁对方的所有核心论点，"

@@ -7,10 +7,14 @@ from .state import DebateState, DebatePhase
 from .debater import DebaterAgent
 from .judge import JudgeAgent
 from .rag import KnowledgeBase
+from .web_search import TavilySearch
 
 # V2 RAG 全局知识库（由 run_debate 设置，节点里读取）
 _affirmative_kb: Optional[KnowledgeBase] = None
 _negative_kb: Optional[KnowledgeBase] = None
+
+# V3 联网检索全局实例（由 run_debate 设置，节点里读取）
+_web_search: Optional[TavilySearch] = None
 
 
 def set_evidence_knowledge_bases(aff_kb: Optional[KnowledgeBase], neg_kb: Optional[KnowledgeBase]):
@@ -20,13 +24,21 @@ def set_evidence_knowledge_bases(aff_kb: Optional[KnowledgeBase], neg_kb: Option
     _negative_kb = neg_kb
 
 
+def set_web_search(web_search: Optional[TavilySearch]):
+    """设置联网检索实例（V3 Tavily）"""
+    global _web_search
+    _web_search = web_search
+
+
 def _get_debater(side: str, stance_detail: str) -> DebaterAgent:
-    """创建辩手 Agent 并设置论据知识库（V2 RAG）"""
+    """创建辩手 Agent 并设置论据知识库和联网检索（V2 RAG + V3 联网检索）"""
     debater = DebaterAgent(side, stance_detail)
     if side == "affirmative" and _affirmative_kb is not None:
         debater.evidence_kb = _affirmative_kb
     elif side == "negative" and _negative_kb is not None:
         debater.evidence_kb = _negative_kb
+    if _web_search is not None:
+        debater.web_search = _web_search
     return debater
 
 

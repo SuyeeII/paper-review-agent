@@ -8,6 +8,7 @@ from langgraph.graph import StateGraph, END
 from .state import DebateState, init_state
 from . import nodes
 from .rag import KnowledgeBase
+from .web_search import TavilySearch
 
 
 def create_debate_graph() -> StateGraph:
@@ -78,6 +79,7 @@ def run_debate(
     rag_enabled: bool = False,
     affirmative_evidence_files: List[str] = None,
     negative_evidence_files: List[str] = None,
+    web_search_enabled: bool = False,
 ) -> DebateState:
     """
     运行一场完整辩论
@@ -92,12 +94,25 @@ def run_debate(
         rag_enabled: 是否启用 RAG 论据检索（V2）
         affirmative_evidence_files: 正方论据文档路径列表（V2 RAG）
         negative_evidence_files: 反方论据文档路径列表（V2 RAG）
+        web_search_enabled: 是否启用 Tavily 联网检索（V3）
 
     Returns:
         最终的 DebateState，包含所有发言和评委评分
     """
     # 初始化状态
-    state = init_state(topic, max_rounds, reflection_enabled, affirmative_stance, negative_stance, rag_enabled=rag_enabled)
+    state = init_state(topic, max_rounds, reflection_enabled, affirmative_stance, negative_stance, rag_enabled=rag_enabled, web_search_enabled=web_search_enabled)
+
+    # V3 联网检索：初始化 TavilySearch
+    if web_search_enabled:
+        print("[V3 联网检索] 正在初始化 Tavily 搜索...")
+        web_search = TavilySearch()
+        if web_search.is_available():
+            nodes.set_web_search(web_search)
+            print("[V3 联网检索] Tavily 初始化成功")
+        else:
+            print("[V3 联网检索] Tavily 不可用（未配置 TAVILY_API_KEY 或未安装 tavily-python），将跳过联网检索")
+            web_search_enabled = False
+            state["web_search_enabled"] = False
 
     # V2 RAG：构建论据知识库
     aff_kb = None

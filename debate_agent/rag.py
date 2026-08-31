@@ -37,8 +37,8 @@ class KnowledgeBase:
         """
         self.stance = stance
         self.topic = topic
-        self.api_key = api_key or os.getenv("EMBEDDING_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
-        self.base_url = base_url or os.getenv("EMBEDDING_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        self.api_key = api_key or os.getenv("EMBEDDING_API_KEY") or os.getenv("ZHIPU_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("OPENAI_API_KEY")
+        self.base_url = base_url or os.getenv("EMBEDDING_BASE_URL") or os.getenv("ZHIPU_BASE_URL") or os.getenv("DEEPSEEK_BASE_URL") or os.getenv("OPENAI_BASE_URL")
         # 根据 base_url 自动选择默认 embedding 模型
         default_model = "text-embedding-3-small"
         if self.base_url and "bigmodel.cn" in self.base_url:
