@@ -44,10 +44,80 @@ def _structured_output_format() -> str:
 """
 
 
+# ===== 论文结构解析 =====
+
+def get_paper_structure_prompt(paper_content: str) -> str:
+    """
+    论文结构解析prompt
+    解析论文的各个部分，提取核心内容，为后续分部分评审提供依据
+    """
+    return f"""你是一位学术论文结构分析专家。请仔细阅读以下论文，解析其结构并提取各部分的核心内容。
+
+【待解析论文】
+{paper_content}
+
+【输出格式——必须严格遵守】
+请按以下结构输出解析结果：
+
+## 论文基本信息
+- **标题**：（论文标题）
+- **作者**：（作者信息，如有）
+- **摘要**：（摘要核心内容，2-3句话概括）
+- **关键词**：（关键词，如有）
+
+## 论文结构解析
+
+### 1. 引言/Introduction
+- **研究背景**：（论文阐述的研究背景和问题）
+- **研究动机**：（为什么要做这个研究，现有方法有什么不足）
+- **研究贡献**：（论文声称的主要贡献，逐条列出）
+- **论文结构安排**：（论文各章节的安排，如有）
+
+### 2. 相关工作/Related Work（如有）
+- **相关工作概述**：（论文调研了哪些相关工作）
+- **与现有工作的区别**：论文声称与现有工作有什么不同
+
+### 3. 方法/算法/Methodology
+- **方法概述**：（论文提出的方法/算法的核心思想）
+- **关键技术点**：（方法中的关键技术、公式、算法步骤，逐条列出）
+- **理论依据**：（方法的理论基础、假设、推导）
+
+### 4. 实验/仿真/Experiments
+- **实验设置**：（实验环境、数据集、基线方法、评价指标、超参数）
+- **实验结果**：（主要实验结果、对比数据、表格/图的核心发现）
+- **消融实验**：（如有，消融实验的设计和结果）
+- **结果分析**：（论文对结果的分析和解释）
+
+### 5. 结论/Conclusion
+- **主要结论**：（论文的核心结论）
+- **局限性**：（论文承认的局限性，如有）
+- **未来工作**：（论文提出的未来研究方向，如有）
+
+### 6. 参考文献
+- **参考文献数量**：（大约多少篇）
+- **代表性参考文献**：（列出3-5篇最相关的参考文献）
+
+## 论文整体评价（结构层面）
+- **结构完整性**：论文结构是否完整，缺少哪些部分
+- **逻辑连贯性**：各部分之间的逻辑是否连贯
+- **篇幅分配**：各部分篇幅分配是否合理
+
+直接输出解析结果，不要加其他说明。
+"""
+
+
 # ===== 创新性审稿人 =====
 
-def get_innovation_review_prompt(paper_content: str) -> str:
+def get_innovation_review_prompt(paper_content: str, paper_structure: Optional[str] = None) -> str:
     """创新性审稿人prompt"""
+    structure_hint = ""
+    if paper_structure:
+        structure_hint = f"""
+【论文结构解析结果（供参考，请针对各部分做专项评审）】
+{paper_structure}
+
+请重点关注：引言中的研究贡献声明、方法部分的创新点、相关工作部分的对比是否充分。
+"""
     return f"""{_reviewer_principle("创新性")}
 
 你是学术论文的创新性审稿人，负责评估论文的创新性、研究贡献和相关工作对比。
@@ -59,6 +129,8 @@ def get_innovation_review_prompt(paper_content: str) -> str:
 4. **时效性**：论文的研究方向是否是当前热点？工作是否跟上了领域最新进展？
 5. **可重复性声明**：论文是否声明了代码/数据可用性？（这也影响工作的影响力和可验证性）
 
+{structure_hint}
+
 【待审论文】
 {paper_content}
 
@@ -68,8 +140,16 @@ def get_innovation_review_prompt(paper_content: str) -> str:
 
 # ===== 方法论审稿人 =====
 
-def get_methodology_review_prompt(paper_content: str) -> str:
+def get_methodology_review_prompt(paper_content: str, paper_structure: Optional[str] = None) -> str:
     """方法论审稿人prompt"""
+    structure_hint = ""
+    if paper_structure:
+        structure_hint = f"""
+【论文结构解析结果（供参考，请针对各部分做专项评审）】
+{paper_structure}
+
+请重点关注：方法部分的算法设计、公式推导、理论假设、技术路线是否清晰合理。
+"""
     return f"""{_reviewer_principle("方法论")}
 
 你是学术论文的方法论审稿人，负责评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。
@@ -81,6 +161,8 @@ def get_methodology_review_prompt(paper_content: str) -> str:
 4. **方法局限性**：论文是否讨论了方法的局限性？适用范围是什么？在什么条件下方法会失效？
 5. **与现有方法的技术差异**：论文方法在技术路线上与现有方法有什么本质区别？是简单组合还是实质改进？
 
+{structure_hint}
+
 【待审论文】
 {paper_content}
 
@@ -90,8 +172,16 @@ def get_methodology_review_prompt(paper_content: str) -> str:
 
 # ===== 实验审稿人（含可复现性评估）=====
 
-def get_experiment_review_prompt(paper_content: str) -> str:
+def get_experiment_review_prompt(paper_content: str, paper_structure: Optional[str] = None) -> str:
     """实验审稿人prompt，包含可复现性评估"""
+    structure_hint = ""
+    if paper_structure:
+        structure_hint = f"""
+【论文结构解析结果（供参考，请针对各部分做专项评审）】
+{paper_structure}
+
+请重点关注：实验部分的实验设置、数据集、基线方法、评价指标、结果分析、消融实验是否充分。
+"""
     return f"""{_reviewer_principle("实验可靠性与可复现性")}
 
 你是学术论文的实验审稿人，负责评估实验设计的科学性、结果的可靠性，以及实验的可复现性。
@@ -109,6 +199,8 @@ def get_experiment_review_prompt(paper_content: str) -> str:
    - 根据论文描述，其他研究者能否复现实验结果？
 7. **结果分析深度**：论文是否对实验结果做了深入分析？是否解释了"为什么这个方法有效/无效"？还是只报告了数字？
 
+{structure_hint}
+
 【待审论文】
 {paper_content}
 
@@ -118,8 +210,16 @@ def get_experiment_review_prompt(paper_content: str) -> str:
 
 # ===== 写作审稿人 =====
 
-def get_writing_review_prompt(paper_content: str) -> str:
+def get_writing_review_prompt(paper_content: str, paper_structure: Optional[str] = None) -> str:
     """写作审稿人prompt"""
+    structure_hint = ""
+    if paper_structure:
+        structure_hint = f"""
+【论文结构解析结果（供参考，请针对各部分做专项评审）】
+{paper_structure}
+
+请重点关注：各部分的写作质量、语言表达、图表规范、参考文献完整性，以及结构是否完整合理。
+"""
     return f"""{_reviewer_principle("写作表达")}
 
 你是学术论文的写作审稿人，负责评估论文结构、语言表达、图表规范和参考文献完整性。
@@ -131,6 +231,8 @@ def get_writing_review_prompt(paper_content: str) -> str:
 4. **参考文献完整性**：参考文献是否全面？是否引用了领域内的重要工作和最新进展？引用格式是否统一、规范？是否有自引过多的问题？正文中的引用是否准确？
 5. **摘要与引言质量**：摘要是否准确概括了论文的核心贡献？引言是否清晰阐述了研究背景、问题、动机和贡献？
 6. **篇幅合理性**：论文篇幅是否合适？有没有冗余内容？关键部分是否有足够的篇幅展开？
+
+{structure_hint}
 
 【待审论文】
 {paper_content}

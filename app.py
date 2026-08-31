@@ -76,18 +76,18 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
 
     # 阶段进度映射
     stages = [
-        (0.1, "初始化论文审稿..."),
-        (0.2, "创新性审稿人评审中..."),
-        (0.35, "方法论审稿人评审中..."),
-        (0.5, "实验审稿人评审中..."),
-        (0.65, "写作审稿人评审中..."),
+        (0.05, "解析论文结构中..."),
+        (0.15, "创新性审稿人评审中..."),
+        (0.3, "方法论审稿人评审中..."),
+        (0.45, "实验审稿人评审中..."),
+        (0.6, "写作审稿人评审中..."),
     ]
     if reflection_enabled:
         stages.extend([
-            (0.75, "创新性审稿人自我反思修正中..."),
-            (0.8, "方法论审稿人自我反思修正中..."),
-            (0.85, "实验审稿人自我反思修正中..."),
-            (0.9, "写作审稿人自我反思修正中..."),
+            (0.7, "创新性审稿人自我反思修正中..."),
+            (0.75, "方法论审稿人自我反思修正中..."),
+            (0.8, "实验审稿人自我反思修正中..."),
+            (0.85, "写作审稿人自我反思修正中..."),
         ])
     stages.append((0.95, "主编汇总综合审稿报告中..."))
 
@@ -115,6 +115,13 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
     ]
 
     review_text = "# 📋 四维审稿意见\n\n"
+
+    # 论文结构解析结果（放在最前面）
+    if final_state.get("paper_structure"):
+        review_text += "## 【论文结构解析】\n\n"
+        review_text += final_state["paper_structure"]
+        review_text += "\n\n---\n\n"
+
     for dim_name, review in dimensions:
         if review:
             review_text += f"## 【{dim_name}审稿人】\n\n{review}\n\n---\n\n"

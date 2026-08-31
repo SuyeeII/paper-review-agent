@@ -19,6 +19,9 @@ def build_graph() -> StateGraph:
     workflow = StateGraph(ReviewState)
 
     # ===== 节点定义 =====
+    # 论文结构解析节点（第一步）
+    workflow.add_node("paper_structure", nodes.node_paper_structure)
+
     # 4个维度审稿节点（并行）
     workflow.add_node("innovation_review", nodes.node_innovation_review)
     workflow.add_node("methodology_review", nodes.node_methodology_review)
@@ -35,8 +38,9 @@ def build_graph() -> StateGraph:
     workflow.add_node("editor_summary", nodes.node_editor_summary)
 
     # ===== 边定义 =====
-    # 起点 → 4个并行审稿节点
-    workflow.set_entry_point("innovation_review")
+    # 起点 → 论文结构解析 → 4个并行审稿节点
+    workflow.set_entry_point("paper_structure")
+    workflow.add_edge("paper_structure", "innovation_review")
     workflow.add_edge("innovation_review", "methodology_review")
     workflow.add_edge("methodology_review", "experiment_review")
     workflow.add_edge("experiment_review", "writing_review")
@@ -126,6 +130,14 @@ def format_review_result(state: ReviewState) -> str:
     lines.append("📝 论文多视角审稿报告")
     lines.append("=" * 60)
     lines.append("")
+
+    # 论文结构解析结果
+    if state.get("paper_structure"):
+        lines.append("【论文结构解析】")
+        lines.append(state["paper_structure"])
+        lines.append("")
+        lines.append("-" * 40)
+        lines.append("")
 
     # 论文内容（截断显示）
     paper_preview = state["topic"][:500] + "..." if len(state["topic"]) > 500 else state["topic"]

@@ -5,6 +5,7 @@ from typing import Optional
 from debate_agent.state import ReviewState, ReviewPhase
 from debate_agent.llm import get_llm
 from debate_agent.prompts import (
+    get_paper_structure_prompt,
     get_innovation_review_prompt,
     get_methodology_review_prompt,
     get_experiment_review_prompt,
@@ -14,12 +15,29 @@ from debate_agent.prompts import (
 )
 
 
+# ===== 论文结构解析节点 =====
+
+def node_paper_structure(state: ReviewState) -> ReviewState:
+    """解析论文结构，提取各部分核心内容，为分部分评审提供依据"""
+    llm = get_llm()
+    prompt = get_paper_structure_prompt(state["topic"])
+    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2)
+    state["paper_structure"] = structure
+    state["full_transcript"].append({
+        "reviewer": "structure",
+        "role": "论文结构解析",
+        "content": structure,
+    })
+    print("[结构解析] 论文结构解析完成")
+    return state
+
+
 # ===== 4个维度审稿节点（并行执行）=====
 
 def node_innovation_review(state: ReviewState) -> ReviewState:
     """创新性审稿人"""
     llm = get_llm()
-    prompt = get_innovation_review_prompt(state["topic"])
+    prompt = get_innovation_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。")
     state["innovation_review"] = review
     state["full_transcript"].append({
@@ -34,7 +52,7 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
 def node_methodology_review(state: ReviewState) -> ReviewState:
     """方法论审稿人"""
     llm = get_llm()
-    prompt = get_methodology_review_prompt(state["topic"])
+    prompt = get_methodology_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。")
     state["methodology_review"] = review
     state["full_transcript"].append({
@@ -49,7 +67,7 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
 def node_experiment_review(state: ReviewState) -> ReviewState:
     """实验审稿人（含可复现性评估）"""
     llm = get_llm()
-    prompt = get_experiment_review_prompt(state["topic"])
+    prompt = get_experiment_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，擅长评估实验设计的科学性、结果的可靠性，以及实验的可复现性。")
     state["experiment_review"] = review
     state["full_transcript"].append({
@@ -64,7 +82,7 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
 def node_writing_review(state: ReviewState) -> ReviewState:
     """写作审稿人"""
     llm = get_llm()
-    prompt = get_writing_review_prompt(state["topic"])
+    prompt = get_writing_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。")
     state["writing_review"] = review
     state["full_transcript"].append({
