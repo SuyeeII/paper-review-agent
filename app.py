@@ -213,10 +213,10 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
     # 展开/收起切换函数
     def toggle_transcript(full_text, is_expanded):
         if is_expanded:
-            # 当前是展开状态，点击后收起
-            preview = full_text[-2000:] if len(full_text) > 2000 else full_text
-            if len(full_text) > 2000:
-                preview = "...（已折叠，点击展开全部查看完整内容）\n\n" + preview
+            # 当前是展开状态，点击后收起（只显示前面1000字）
+            preview = full_text[:1000] if len(full_text) > 1000 else full_text
+            if len(full_text) > 1000:
+                preview = preview + "\n\n...（后面的内容已折叠，点击下方「展开全部」查看完整辩论记录）"
             return preview, False, "展开全部"
         else:
             # 当前是收起状态，点击后展开
@@ -232,11 +232,11 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
         outputs=[transcript_md, score_md, full_text_box, status_text],
     )
 
-    # 辩论完成后自动折叠 transcript（只显示最新部分），显示展开按钮
+    # 辩论完成后自动折叠 transcript（只显示前面部分），显示展开按钮
     def on_status_change(status_text, full_transcript):
-        if status_text and "辩论完成" in status_text and full_transcript and len(full_transcript) > 2000:
-            # 辩论完成，折叠成只显示最后2000字
-            preview = "...（已折叠，点击下方「展开全部」查看完整辩论记录）\n\n" + full_transcript[-2000:]
+        if status_text and "辩论完成" in status_text and full_transcript and len(full_transcript) > 1000:
+            # 辩论完成，折叠成只显示前面1000字
+            preview = full_transcript[:1000] + "\n\n...（后面的内容已折叠，点击下方「展开全部」查看完整辩论记录）"
             return preview, full_transcript, False, gr.update(visible=True, value="展开全部")
         return full_transcript, full_transcript, False, gr.update(visible=False)
 
