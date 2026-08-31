@@ -52,7 +52,7 @@ def node_opening_affirmative(state: DebateState) -> DebateState:
     state["current_speaker"] = "negative"
     state["full_transcript"].append({
         "speaker": "affirmative",
-        "role": "多方（立论）",
+        "role": "支持接受方（立论）",
         "content": speech,
     })
     return state
@@ -68,7 +68,7 @@ def node_opening_negative(state: DebateState) -> DebateState:
     state["current_round"] = 1
     state["full_transcript"].append({
         "speaker": "negative",
-        "role": "空方（立论）",
+        "role": "建议拒稿方（立论）",
         "content": speech,
     })
     return state
@@ -113,7 +113,7 @@ def node_clash_affirmative(state: DebateState) -> DebateState:
     state["affirmative_reflection"] = None
     state["full_transcript"].append({
         "speaker": "affirmative",
-        "role": f"多方（第{round_num}轮分析）",
+        "role": f"支持接受方（第{round_num}轮审稿）",
         "content": speech,
     })
     return state
@@ -147,7 +147,7 @@ def node_clash_negative(state: DebateState) -> DebateState:
     state["negative_reflection"] = None
     state["full_transcript"].append({
         "speaker": "negative",
-        "role": f"空方（第{round_num}轮分析）",
+        "role": f"建议拒稿方（第{round_num}轮审稿）",
         "content": speech,
     })
     return state
@@ -180,12 +180,12 @@ def node_reflection(state: DebateState) -> DebateState:
 
     state["full_transcript"].append({
         "speaker": "system",
-        "role": "【自我反思】多方",
+        "role": "【自我反思】支持接受方",
         "content": aff_reflection,
     })
     state["full_transcript"].append({
         "speaker": "system",
-        "role": "【自我反思】空方",
+        "role": "【自我反思】建议拒稿方",
         "content": neg_reflection,
     })
 
@@ -299,7 +299,7 @@ def node_rebuttal_affirmative(state: DebateState) -> DebateState:
     state["current_speaker"] = "negative"
     state["full_transcript"].append({
         "speaker": "affirmative",
-        "role": "多方（反驳）",
+        "role": "支持接受方（反驳）",
         "content": speech,
     })
     return state
@@ -319,7 +319,7 @@ def node_rebuttal_negative(state: DebateState) -> DebateState:
     state["current_speaker"] = "affirmative"
     state["full_transcript"].append({
         "speaker": "negative",
-        "role": "空方（反驳）",
+        "role": "建议拒稿方（反驳）",
         "content": speech,
     })
     return state
@@ -339,7 +339,7 @@ def node_closing_affirmative(state: DebateState) -> DebateState:
     state["current_speaker"] = "negative"
     state["full_transcript"].append({
         "speaker": "affirmative",
-        "role": "多方（总结）",
+        "role": "支持接受方（总结）",
         "content": speech,
     })
     return state
@@ -357,7 +357,7 @@ def node_closing_negative(state: DebateState) -> DebateState:
     state["phase"] = DebatePhase.JUDGING
     state["full_transcript"].append({
         "speaker": "negative",
-        "role": "空方（总结）",
+        "role": "建议拒稿方（总结）",
         "content": speech,
     })
     return state
@@ -378,12 +378,12 @@ def node_judge(state: DebateState) -> DebateState:
     state["phase"] = DebatePhase.DONE
     state["full_transcript"].append({
         "speaker": "judge",
-        "role": "多空综合评估",
-        "content": f"多方总分：{score.get('affirmative_total', 0)}\n"
-                   f"空方总分：{score.get('negative_total', 0)}\n"
-                   f"评估结论：{'多方观点更有说服力' if score.get('winner') == 'affirmative' else '空方观点更有说服力'}\n\n"
+        "role": "综合审稿意见",
+        "content": f"支持接受方总分：{score.get('affirmative_total', 0)}\n"
+                   f"建议拒稿方总分：{score.get('negative_total', 0)}\n"
+                   f"审稿结论：{'建议接受' if score.get('winner') == 'affirmative' else '建议拒稿/大修'}\n\n"
                    f"综合点评：\n{score.get('comment', '')}\n\n"
-                   f"⚠️ 以上为 AI 多空观点对比分析，不构成任何投资建议。",
+                   f"💡 以上为 AI 模拟审稿意见，仅供参考，最终审稿决定请以期刊/会议官方意见为准。",
     })
     return state
 
