@@ -1,9 +1,11 @@
 """辩手 Agent
 实现立论、攻辩、自我反思、驳论、总结五个阶段
+V2 新增：RAG 论据检索，在发言前检索知识库中的真实论据注入 prompt
 """
 from typing import List, Optional
 from .llm import get_llm
 from . import prompts
+from .rag import KnowledgeBase, format_evidence_for_prompt
 
 
 class DebaterAgent:
@@ -22,10 +24,29 @@ class DebaterAgent:
         self.llm = llm or get_llm()
         # 记录自己的所有发言，用于反思和总结
         self.own_speeches: List[str] = []
+        # V2 RAG 论据知识库（由外部设置，为 None 时不启用检索）
+        self.evidence_kb: Optional[KnowledgeBase] = None
+
+    def retrieve_evidence(self, query: str, top_k: int = 3) -> str:
+        """
+        V2 RAG 论据检索
+        从知识库中检索与 query 相关的论据，格式化为 prompt 可用的文本
+        如果知识库不可用，返回空字符串
+        """
+        if self.evidence_kb is None or not self.evidence_kb.is_available():
+            return ""
+        evidences = self.evidence_kb.search(query, top_k=top_k)
+        if not evidences:
+            return ""
+        return format_evidence_for_prompt(evidences, self.side_name)
 
     def opening(self, topic: str) -> str:
         """立论陈词"""
         prompt = prompts.get_opening_prompt(topic, self.side, self.stance_detail)
+        # V2 RAG：检索论据注入 prompt
+        evidence = self.retrieve_evidence(topic, top_k=3)
+        if evidence:
+            prompt = prompt + "\n\n" + evidence
         system = (
             f"你是一场辩论赛的{self.side_name}一辩，思维缜密，善于论证。"
             f"你的立场极其坚定，绝不妥协，绝不认同对方观点。"
@@ -51,6 +72,10 @@ class DebaterAgent:
         prompt = prompts.get_clash_prompt(
             topic, self.side, self.stance_detail, round_num, opponent_previous, own_previous, reflection
         )
+        # V2 RAG：检索论据注入 prompt（用辩题+对方上轮论点作为查询）
+        evidence = self.retrieve_evidence(f"{topic} {opponent_previous[:200]}", top_k=3)
+        if evidence:
+            prompt = prompt + "\n\n" + evidence
         system = (
             f"你是辩论赛的{self.side_name}，反应敏捷，善于抓住对方漏洞进行反驳。"
             f"你的立场绝对坚定，绝不动摇。你的任务是摧毁对方论证，不是被对方说服。"
@@ -89,6 +114,10 @@ class DebaterAgent:
             reflection: 自我反思结果
         """
         prompt = prompts.get_rebuttal_prompt(topic, self.side, self.stance_detail, own_speeches, all_opponent_speeches, reflection)
+        # V2 RAG：检索论据注入 prompt
+        evidence = self.retrieve_evidence(topic, top_k=4)
+        if evidence:
+            prompt = prompt + "\n\n" + evidence
         system = (
             f"你是辩论赛的{self.side_name}，善于系统性地反驳对方论点。"
             f"你的立场坚如磐石，绝不动摇。你的目标是彻底摧毁对方的所有核心论点，"

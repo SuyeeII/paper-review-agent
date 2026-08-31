@@ -1,11 +1,13 @@
 """LangGraph 辩论图构建与运行入口
 这是整个系统的核心编排层
+V2 新增：RAG 论据检索集成
 """
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, List
 from langgraph.graph import StateGraph, END
 
 from .state import DebateState, init_state
 from . import nodes
+from .rag import KnowledgeBase
 
 
 def create_debate_graph() -> StateGraph:
@@ -73,6 +75,9 @@ def run_debate(
     affirmative_stance: str = None,
     negative_stance: str = None,
     progress_callback: Optional[Callable[[str, DebateState], None]] = None,
+    rag_enabled: bool = False,
+    affirmative_evidence_files: List[str] = None,
+    negative_evidence_files: List[str] = None,
 ) -> DebateState:
     """
     运行一场完整辩论
@@ -84,12 +89,31 @@ def run_debate(
         affirmative_stance: 正方立场的明确表述（如"猫更适合当宠物"），不填则默认"支持本辩题"
         negative_stance: 反方立场的明确表述（如"狗更适合当宠物"），不填则默认"反对本辩题"
         progress_callback: 进度回调函数，签名 callback(current_stage, state)，用于前端实时展示
+        rag_enabled: 是否启用 RAG 论据检索（V2）
+        affirmative_evidence_files: 正方论据文档路径列表（V2 RAG）
+        negative_evidence_files: 反方论据文档路径列表（V2 RAG）
 
     Returns:
         最终的 DebateState，包含所有发言和评委评分
     """
     # 初始化状态
-    state = init_state(topic, max_rounds, reflection_enabled, affirmative_stance, negative_stance)
+    state = init_state(topic, max_rounds, reflection_enabled, affirmative_stance, negative_stance, rag_enabled=rag_enabled)
+
+    # V2 RAG：构建论据知识库
+    aff_kb = None
+    neg_kb = None
+    if rag_enabled:
+        print("[V2 RAG] 正在构建论据知识库...")
+        if affirmative_evidence_files:
+            aff_kb = KnowledgeBase("正方", topic)
+            aff_kb.load_documents(affirmative_evidence_files)
+            aff_kb.build_index()
+        if negative_evidence_files:
+            neg_kb = KnowledgeBase("反方", topic)
+            neg_kb.load_documents(negative_evidence_files)
+            neg_kb.build_index()
+        nodes.set_evidence_knowledge_bases(aff_kb, neg_kb)
+        print(f"[V2 RAG] 知识库构建完成：正方 {aff_kb.index.ntotal if aff_kb and aff_kb.index else 0} 条，反方 {neg_kb.index.ntotal if neg_kb and neg_kb.index else 0} 条")
 
     # 编译图
     graph = create_debate_graph()

@@ -48,6 +48,9 @@ class DebateState(TypedDict):
     summary_enabled: bool                   # 是否启用记忆摘要压缩
     summary_threshold: int                  # 超过多少轮后开始摘要（默认2，即第3轮开始对第1轮做摘要）
 
+    # ===== V2 RAG 论据检索 =====
+    rag_enabled: bool                       # 是否启用 RAG 论据检索
+
     # ===== 评委评分 =====
     judge_score: Optional[Dict[str, Any]]  # 评委评分结果
     winner: Optional[str]                    # 获胜方
@@ -65,6 +68,7 @@ def init_state(
     negative_stance: str = None,
     summary_enabled: bool = True,
     summary_threshold: int = 2,
+    rag_enabled: bool = False,
 ) -> DebateState:
     """
     初始化辩论状态
@@ -101,6 +105,7 @@ def init_state(
         "negative_summary": None,
         "summary_enabled": summary_enabled,
         "summary_threshold": summary_threshold,
+        "rag_enabled": rag_enabled,
         "judge_score": None,
         "winner": None,
         "error": None,

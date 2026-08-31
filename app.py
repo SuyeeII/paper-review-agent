@@ -7,7 +7,7 @@ from debate_agent import run_debate, format_debate_result
 from debate_agent.state import DebateState
 
 
-def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirmative_stance: str, negative_stance: str, progress=gr.Progress()):
+def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirmative_stance: str, negative_stance: str, rag_enabled: bool, aff_evidence_paths: str, neg_evidence_paths: str, progress=gr.Progress()):
     """
     Gradio 界面的辩论运行函数
     使用 progress 实时展示辩论进度
@@ -19,6 +19,17 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirma
     # 如果用户没填立场表述，用默认值
     aff_stance = affirmative_stance.strip() if affirmative_stance and affirmative_stance.strip() else None
     neg_stance = negative_stance.strip() if negative_stance and negative_stance.strip() else None
+
+    # V2 RAG：解析论据文件路径（多个文件用逗号或换行分隔）
+    aff_files = []
+    neg_files = []
+    if rag_enabled:
+        if aff_evidence_paths and aff_evidence_paths.strip():
+            aff_files = [p.strip() for p in aff_evidence_paths.replace('\n', ',').split(',') if p.strip()]
+        if neg_evidence_paths and neg_evidence_paths.strip():
+            neg_files = [p.strip() for p in neg_evidence_paths.replace('\n', ',').split(',') if p.strip()]
+        print(f"[V2 RAG] 正方论据文件: {aff_files}")
+        print(f"[V2 RAG] 反方论据文件: {neg_files}")
 
     transcript_lines = []
     final_state = None
@@ -66,6 +77,9 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirma
             affirmative_stance=aff_stance,
             negative_stance=neg_stance,
             progress_callback=progress_callback,
+            rag_enabled=rag_enabled,
+            affirmative_evidence_files=aff_files if rag_enabled else None,
+            negative_evidence_files=neg_files if rag_enabled else None,
         )
     except Exception as e:
         error_msg = f"❌ 辩论运行出错：{str(e)}"
@@ -144,6 +158,23 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
                 value=True,
                 label="启用自我反思机制（Self-Reflection）✅ 推荐开启",
             )
+            rag_checkbox = gr.Checkbox(
+                value=False,
+                label="启用 RAG 论据检索（V2，需配置 embedding API）",
+            )
+            with gr.Row(visible=False) as rag_config:
+                aff_evidence_input = gr.Textbox(
+                    label="正方论据文件路径（多个用逗号分隔，支持 .txt/.md）",
+                    placeholder="例如：data/aff_evidence1.txt, data/aff_evidence2.md",
+                    lines=2,
+                )
+                neg_evidence_input = gr.Textbox(
+                    label="反方论据文件路径（多个用逗号分隔，支持 .txt/.md）",
+                    placeholder="例如：data/neg_evidence1.txt, data/neg_evidence2.md",
+                    lines=2,
+                )
+            # RAG 开关控制配置区域显示
+            rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
             run_button = gr.Button("🚀 开始辩论", variant="primary", size="lg")
 
             status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False)
@@ -161,7 +192,7 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
     # 事件绑定
     run_button.click(
         fn=run_debate_ui,
-        inputs=[topic_input, rounds_slider, reflection_checkbox, affirmative_stance_input, negative_stance_input],
+        inputs=[topic_input, rounds_slider, reflection_checkbox, affirmative_stance_input, negative_stance_input, rag_checkbox, aff_evidence_input, neg_evidence_input],
         outputs=[transcript_md, score_md, full_text_box, status_text],
     )
 

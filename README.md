@@ -10,7 +10,8 @@
 - **多轮攻辩循环**：基于 LangGraph 条件边实现循环，可配置 1-5 轮
 - **专业评委评分**：8 个维度独立打分（含立场坚定性），输出胜负和专业点评
 - **实时演示界面**：Gradio 界面，辩论过程实时展示
-- **模型无关**：统一封装 OpenAI 兼容接口，支持 DeepSeek / OpenAI 等模型
+- **模型无关**：统一封装 OpenAI 兼容接口，支持 DeepSeek / OpenAI / 智谱 GLM 等模型
+- **V2 RAG 论据检索**：支持加载自定义论据文档，辩论时自动检索相关论据注入 prompt，立场隔离（正方只检索正方论据，反方只检索反方论据），基于 FAISS 向量检索
 
 ## 🏗️ 系统架构
 
@@ -63,11 +64,13 @@ debate-agent/
 │   ├── __init__.py       # 包入口
 │   ├── state.py          # 辩论状态定义（LangGraph State）
 │   ├── prompts.py        # Prompt 模板（立论/攻辩/反思/驳论/总结/评分）
-│   ├── llm.py            # LLM 客户端封装（支持 DeepSeek/OpenAI/Qwen）
+│   ├── llm.py            # LLM 客户端封装（支持 DeepSeek/OpenAI/智谱GLM）
 │   ├── debater.py        # 辩手 Agent（立论/攻辩/反思/驳论/总结）
 │   ├── judge.py          # 评委 Agent（多维度评分）
 │   ├── nodes.py          # LangGraph 图节点函数
-│   └── graph.py          # 辩论图构建与运行入口
+│   ├── graph.py          # 辩论图构建与运行入口
+│   └── rag.py            # V2 RAG 论据检索（FAISS向量库+立场隔离）
+├── data/                 # 论据文档目录（正方/反方论据 .md/.txt）
 ├── app.py                # Gradio 界面
 ├── requirements.txt      # Python 依赖
 ├── .env.example          # 环境变量示例
@@ -121,6 +124,41 @@ print(format_debate_result(state))
 
 > 提示：对于"选择题"辩题（如"猫和狗谁更适合当宠物"）或带贬义倾向的辩题（如"年轻人应不应该躺平"），务必传入 `affirmative_stance` / `negative_stance` 明确双方立场，否则模型可能自行脑补导致立场混淆。
 
+### 5. V2 RAG 论据检索（可选）
+
+开启 RAG 后，辩手 Agent 会在立论/攻辩/驳论前从你提供的论据文档中检索相关论据，注入 prompt，让辩论引用真实数据而非凭空编造。
+
+**准备论据文档**：将正方/反方论据分别写成 `.md` 或 `.txt` 文件，放在 `data/` 目录下（项目已附带猫/狗示例论据）。
+
+**命令行开启 RAG**：
+
+```python
+from debate_agent import run_debate
+
+state = run_debate(
+    topic="猫和狗谁更适合当宠物",
+    max_rounds=2,
+    reflection_enabled=True,
+    affirmative_stance="猫更适合当宠物",
+    negative_stance="狗更适合当宠物",
+    rag_enabled=True,                                    # 开启RAG
+    affirmative_evidence_files=["data/affirmative_evidence_cat.md"],  # 正方论据
+    negative_evidence_files=["data/negative_evidence_dog.md"],        # 反方论据
+)
+```
+
+**Gradio 界面开启 RAG**：勾选"启用 RAG 论据检索"，在展开的输入框中填入正方/反方论据文件路径（多个用逗号分隔）。
+
+**Embedding 配置**：RAG 需要 embedding API。系统会自动复用你在 `.env` 中配置的 LLM API（智谱 GLM 自动用 `embedding-2` 模型，OpenAI 自动用 `text-embedding-3-small`）。也可以单独配置：
+
+```bash
+EMBEDDING_API_KEY=your_key
+EMBEDDING_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
+EMBEDDING_MODEL=embedding-2
+```
+
+**立场隔离**：正方论据库和反方论据库完全分开，正方 Agent 只会检索正方论据，反方 Agent 只会检索反方论据，不会出现"正方引用反方论据"的情况。
+
 ## 🧠 核心算法说明
 
 ### Self-Reflection 自我反思机制
@@ -143,6 +181,20 @@ print(format_debate_result(state))
 - **状态共享**：所有 Agent 共享同一个 state dict，辩论历史完整保留
 - **可观测性**：每个节点执行完都可以获取中间状态，便于调试和展示
 
+### V2 RAG 论据检索机制
+
+RAG（Retrieval-Augmented Generation，检索增强生成）让辩手 Agent 不再凭空编造数据，而是从你提供的论据文档中检索真实论据。
+
+**工作流程**：
+
+1. **文档加载与切分**：加载 `.md`/`.txt` 论据文档，按段落切分为文本块（超过 500 字的段落再按句子切分）
+2. **向量化**：调用 embedding API 将每个文本块转为向量（智谱 `embedding-2` 维度 1024）
+3. **构建 FAISS 索引**：用 FAISS IndexFlatL2 存储向量，支持高效相似度检索
+4. **辩论时检索**：辩手 Agent 在立论/攻辩/驳论前，用"辩题+对方上轮论点"作为查询，从己方论据库中检索 Top-3 最相关论据
+5. **注入 Prompt**：检索到的论据格式化为"【可引用的论据】"块，拼接到 prompt 末尾，引导模型引用
+
+**立场隔离设计**：正方和反方各有独立的知识库实例和 FAISS 索引，正方 Agent 只能访问正方论据库，反方只能访问反方论据库，从物理上杜绝立场混淆。
+
 ## 📊 评测维度
 
 评委从以下 8 个维度对双方独立打分（0-10 分）：
@@ -160,7 +212,8 @@ print(format_debate_result(state))
 
 - **LangGraph** — 多 Agent 工作流编排
 - **LangChain** — LLM 应用框架
-- **OpenAI SDK** — 统一 LLM 调用（兼容 DeepSeek / Qwen / GPT）
+- **OpenAI SDK** — 统一 LLM 调用（兼容 DeepSeek / 智谱 GLM / GPT）
+- **FAISS** — 向量检索库（V2 RAG 论据检索）
 - **Gradio** — 快速构建演示界面
 
 ## 📝 License

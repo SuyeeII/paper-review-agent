@@ -1,17 +1,40 @@
 """LangGraph 图节点函数
 每个节点接收 state，处理后返回更新后的 state
+V2 新增：RAG 论据检索集成
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from .state import DebateState, DebatePhase
 from .debater import DebaterAgent
 from .judge import JudgeAgent
+from .rag import KnowledgeBase
+
+# V2 RAG 全局知识库（由 run_debate 设置，节点里读取）
+_affirmative_kb: Optional[KnowledgeBase] = None
+_negative_kb: Optional[KnowledgeBase] = None
+
+
+def set_evidence_knowledge_bases(aff_kb: Optional[KnowledgeBase], neg_kb: Optional[KnowledgeBase]):
+    """设置正方/反方的论据知识库（V2 RAG）"""
+    global _affirmative_kb, _negative_kb
+    _affirmative_kb = aff_kb
+    _negative_kb = neg_kb
+
+
+def _get_debater(side: str, stance_detail: str) -> DebaterAgent:
+    """创建辩手 Agent 并设置论据知识库（V2 RAG）"""
+    debater = DebaterAgent(side, stance_detail)
+    if side == "affirmative" and _affirmative_kb is not None:
+        debater.evidence_kb = _affirmative_kb
+    elif side == "negative" and _negative_kb is not None:
+        debater.evidence_kb = _negative_kb
+    return debater
 
 
 # ===== 立论阶段 =====
 
 def node_opening_affirmative(state: DebateState) -> DebateState:
     """正方立论"""
-    debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    debater = _get_debater("affirmative", state["affirmative_stance"])
     speech = debater.opening(state["topic"])
     state["affirmative_opening"] = speech
     state["current_speaker"] = "negative"
@@ -25,7 +48,7 @@ def node_opening_affirmative(state: DebateState) -> DebateState:
 
 def node_opening_negative(state: DebateState) -> DebateState:
     """反方立论"""
-    debater = DebaterAgent("negative", state["negative_stance"])
+    debater = _get_debater("negative", state["negative_stance"])
     speech = debater.opening(state["topic"])
     state["negative_opening"] = speech
     state["phase"] = DebatePhase.CLASH
@@ -63,7 +86,7 @@ def node_clash_affirmative(state: DebateState) -> DebateState:
     # 如果启用了反思且上一轮有反思结果，传入
     reflection = state.get("affirmative_reflection") if state.get("reflection_enabled") else None
 
-    debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    debater = _get_debater("affirmative", state["affirmative_stance"])
     speech = debater.clash(
         topic=state["topic"],
         round_num=round_num,
@@ -98,7 +121,7 @@ def node_clash_negative(state: DebateState) -> DebateState:
 
     reflection = state.get("negative_reflection") if state.get("reflection_enabled") else None
 
-    debater = DebaterAgent("negative", state["negative_stance"])
+    debater = _get_debater("negative", state["negative_stance"])
     speech = debater.clash(
         topic=state["topic"],
         round_num=round_num,
@@ -134,12 +157,12 @@ def node_reflection(state: DebateState) -> DebateState:
     neg_speeches = _get_side_speeches_for_context(state, "negative")
 
     # 正方反思（参考自己的所有发言 + 反方的所有发言）
-    aff_debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    aff_debater = _get_debater("affirmative", state["affirmative_stance"])
     aff_reflection = aff_debater.reflect(state["topic"], aff_speeches, neg_speeches)
     state["affirmative_reflection"] = aff_reflection
 
     # 反方反思（参考自己的所有发言 + 正方的所有发言）
-    neg_debater = DebaterAgent("negative", state["negative_stance"])
+    neg_debater = _get_debater("negative", state["negative_stance"])
     neg_reflection = neg_debater.reflect(state["topic"], neg_speeches, aff_speeches)
     state["negative_reflection"] = neg_reflection
 
@@ -230,13 +253,13 @@ def node_summary(state: DebateState) -> DebateState:
 
     # 正方摘要
     aff_speeches = [state["affirmative_opening"]] + state["affirmative_clashes"][:rounds_to_summarize]
-    aff_debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    aff_debater = _get_debater("affirmative", state["affirmative_stance"])
     aff_summary = aff_debater.summarize(state["topic"], aff_speeches, state.get("affirmative_summary"))
     state["affirmative_summary"] = aff_summary
 
     # 反方摘要
     neg_speeches = [state["negative_opening"]] + state["negative_clashes"][:rounds_to_summarize]
-    neg_debater = DebaterAgent("negative", state["negative_stance"])
+    neg_debater = _get_debater("negative", state["negative_stance"])
     neg_summary = neg_debater.summarize(state["topic"], neg_speeches, state.get("negative_summary"))
     state["negative_summary"] = neg_summary
 
@@ -258,7 +281,7 @@ def node_rebuttal_affirmative(state: DebateState) -> DebateState:
     neg_all = _get_side_speeches_for_context(state, "negative")
     reflection = state.get("affirmative_reflection") if state.get("reflection_enabled") else None
 
-    debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    debater = _get_debater("affirmative", state["affirmative_stance"])
     speech = debater.rebuttal(state["topic"], aff_all, neg_all, reflection)
     state["affirmative_rebuttal"] = speech
     state["current_speaker"] = "negative"
@@ -277,7 +300,7 @@ def node_rebuttal_negative(state: DebateState) -> DebateState:
     neg_all = _get_side_speeches_for_context(state, "negative")
     reflection = state.get("negative_reflection") if state.get("reflection_enabled") else None
 
-    debater = DebaterAgent("negative", state["negative_stance"])
+    debater = _get_debater("negative", state["negative_stance"])
     speech = debater.rebuttal(state["topic"], neg_all, aff_all, reflection)
     state["negative_rebuttal"] = speech
     state["phase"] = DebatePhase.CLOSING
@@ -298,7 +321,7 @@ def node_closing_affirmative(state: DebateState) -> DebateState:
     aff_all = _get_side_speeches_for_context(state, "affirmative", include_rebuttal=True)
     neg_all = _get_side_speeches_for_context(state, "negative", include_rebuttal=True)
 
-    debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    debater = _get_debater("affirmative", state["affirmative_stance"])
     speech = debater.closing(state["topic"], aff_all, neg_all)
     state["affirmative_closing"] = speech
     state["current_speaker"] = "negative"
@@ -316,7 +339,7 @@ def node_closing_negative(state: DebateState) -> DebateState:
     aff_all = _get_side_speeches_for_context(state, "affirmative", include_rebuttal=True)
     neg_all = _get_side_speeches_for_context(state, "negative", include_rebuttal=True)
 
-    debater = DebaterAgent("negative", state["negative_stance"])
+    debater = _get_debater("negative", state["negative_stance"])
     speech = debater.closing(state["topic"], neg_all, aff_all)
     state["negative_closing"] = speech
     state["phase"] = DebatePhase.JUDGING
