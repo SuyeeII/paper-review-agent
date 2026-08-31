@@ -1,10 +1,73 @@
-"""多 Agent 辩论系统 - Gradio 界面
+"""论文多视角审稿助手 - Gradio 界面
 运行：python app.py
 然后浏览器打开 http://localhost:7860
 """
+import os
 import gradio as gr
 from debate_agent import run_debate, format_debate_result
 from debate_agent.state import DebateState
+
+try:
+    from PyPDF2 import PdfReader
+    HAS_PYPDF2 = True
+except ImportError:
+    HAS_PYPDF2 = False
+
+
+def parse_paper_file(file_obj) -> str:
+    """
+    解析上传的论文文件，提取文本内容
+    支持 PDF / TXT / MD
+    返回提取的文本内容，如果解析失败返回空字符串
+    """
+    if file_obj is None:
+        return ""
+
+    # Gradio 的 File 组件返回的是文件路径字符串（单文件）或列表
+    file_path = file_obj if isinstance(file_obj, str) else (file_obj[0] if isinstance(file_obj, list) and file_obj else None)
+    if not file_path or not os.path.exists(file_path):
+        return ""
+
+    ext = os.path.splitext(file_path)[1].lower()
+
+    try:
+        if ext == ".pdf":
+            if not HAS_PYPDF2:
+                return "⚠️ PDF 解析库未安装，请安装 PyPDF2 后重试，或直接粘贴论文文本。"
+            reader = PdfReader(file_path)
+            text_parts = []
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+            return "\n".join(text_parts)
+
+        elif ext in (".txt", ".md", ".markdown"):
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+
+        else:
+            return f"⚠️ 不支持的文件格式：{ext}，请上传 PDF / TXT / MD 文件，或直接粘贴论文文本。"
+
+    except Exception as e:
+        return f"⚠️ 文件解析失败：{str(e)}，请尝试直接粘贴论文文本。"
+
+
+def on_paper_file_upload(file_obj, current_text: str) -> str:
+    """
+    文件上传后，把解析的内容填入文本框
+    如果文本框已有内容，追加在后面（用分隔线分开）
+    """
+    parsed = parse_paper_file(file_obj)
+    if not parsed:
+        return current_text
+
+    if current_text and current_text.strip():
+        # 已有内容，追加在后面
+        return current_text + "\n\n---\n\n【上传文件内容】\n\n" + parsed
+    else:
+        # 文本框为空，直接填入
+        return parsed
 
 
 def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
@@ -16,7 +79,7 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
     使用 progress 实时展示辩论进度
     """
     if not topic or not topic.strip():
-        yield "请输入辩题！", "", "", ""
+        yield "请输入论文内容，或上传论文文件！", "", "", ""
         return
 
     # 如果用户没填立场表述，用默认值
@@ -157,6 +220,16 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
         placeholder="粘贴论文标题、摘要或全文，例如：\n\n标题：基于多智能体强化学习的自动驾驶决策方法研究\n\n摘要：本文提出了一种...",
         lines=6,
         value="标题：基于多智能体强化学习的自动驾驶决策方法研究\n\n摘要：本文提出了一种基于多智能体强化学习的自动驾驶决策方法，通过引入注意力机制和课程学习策略，显著提升了复杂交通场景下的决策效率和安全性。实验结果表明，该方法在多个基准测试中优于现有方法。",
+    )
+    paper_file_input = gr.File(
+        label="📄 或上传论文文件（PDF / TXT / MD，上传后自动解析填入上方文本框）",
+        file_count="single",
+        file_types=[".pdf", ".txt", ".md"],
+    )
+    paper_file_input.change(
+        fn=on_paper_file_upload,
+        inputs=[paper_file_input, topic_input],
+        outputs=[topic_input],
     )
     with gr.Row():
         affirmative_stance_input = gr.Textbox(
