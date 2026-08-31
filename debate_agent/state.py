@@ -42,6 +42,12 @@ class DebateState(TypedDict):
     negative_reflection: Optional[str]     # 反方自我反思
     reflection_enabled: bool                # 是否启用自我反思
 
+    # ===== V1.5 记忆摘要压缩 =====
+    affirmative_summary: Optional[str]     # 正方历史发言摘要（久远轮次压缩后）
+    negative_summary: Optional[str]        # 反方历史发言摘要
+    summary_enabled: bool                   # 是否启用记忆摘要压缩
+    summary_threshold: int                  # 超过多少轮后开始摘要（默认2，即第3轮开始对第1轮做摘要）
+
     # ===== 评委评分 =====
     judge_score: Optional[Dict[str, Any]]  # 评委评分结果
     winner: Optional[str]                    # 获胜方
@@ -57,6 +63,8 @@ def init_state(
     reflection_enabled: bool = True,
     affirmative_stance: str = None,
     negative_stance: str = None,
+    summary_enabled: bool = True,
+    summary_threshold: int = 2,
 ) -> DebateState:
     """
     初始化辩论状态
@@ -67,6 +75,8 @@ def init_state(
         reflection_enabled: 是否启用自我反思
         affirmative_stance: 正方立场的明确表述（如"猫更适合当宠物"），不填则默认"支持本辩题"
         negative_stance: 反方立场的明确表述（如"狗更适合当宠物"），不填则默认"反对本辩题"
+        summary_enabled: 是否启用记忆摘要压缩（V1.5）
+        summary_threshold: 超过多少轮后开始摘要（默认2，即第3轮开始对第1轮做摘要）
     """
     return {
         "topic": topic,
@@ -87,6 +97,10 @@ def init_state(
         "affirmative_reflection": None,
         "negative_reflection": None,
         "reflection_enabled": reflection_enabled,
+        "affirmative_summary": None,
+        "negative_summary": None,
+        "summary_enabled": summary_enabled,
+        "summary_threshold": summary_threshold,
         "judge_score": None,
         "winner": None,
         "error": None,

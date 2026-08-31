@@ -16,7 +16,7 @@ def create_debate_graph() -> StateGraph:
     正方立论 → 反方立论 → [攻辩循环] → 正方驳论 → 反方驳论 → 正方总结 → 反方总结 → 评委评分 → END
 
     攻辩循环：
-    正方攻辩 → 反方攻辩 → 自我反思 → (判断轮数) → 继续攻辩 / 进入驳论
+    正方攻辩 → 反方攻辩 → 自我反思 → 记忆摘要压缩(V1.5) → (判断轮数) → 继续攻辩 / 进入驳论
     """
     graph = StateGraph(DebateState)
 
@@ -26,6 +26,7 @@ def create_debate_graph() -> StateGraph:
     graph.add_node("clash_affirmative", nodes.node_clash_affirmative)
     graph.add_node("clash_negative", nodes.node_clash_negative)
     graph.add_node("reflection", nodes.node_reflection)
+    graph.add_node("summary", nodes.node_summary)  # V1.5 记忆摘要压缩
     graph.add_node("rebuttal_affirmative", nodes.node_rebuttal_affirmative)
     graph.add_node("rebuttal_negative", nodes.node_rebuttal_negative)
     graph.add_node("closing_affirmative", nodes.node_closing_affirmative)
@@ -40,11 +41,12 @@ def create_debate_graph() -> StateGraph:
     graph.add_edge("opening_negative", "clash_affirmative")
     graph.add_edge("clash_affirmative", "clash_negative")
     graph.add_edge("clash_negative", "reflection")
+    graph.add_edge("reflection", "summary")  # V1.5 反思后做摘要压缩
 
     # ===== 条件边：攻辩循环的核心 =====
-    # 反思结束后，判断是否继续攻辩
+    # 摘要结束后，判断是否继续攻辩
     graph.add_conditional_edges(
-        "reflection",
+        "summary",
         nodes.should_continue_clash,
         {
             # 继续下一轮攻辩

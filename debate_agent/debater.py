@@ -116,3 +116,21 @@ class DebaterAgent:
         result = self.llm.chat(prompt, system_prompt=system, temperature=0.75)
         self.own_speeches.append(result)
         return result
+
+    def summarize(self, topic: str, speeches_to_summarize: List[str], existing_summary: str = None) -> str:
+        """
+        V1.5 记忆摘要压缩
+        把久远的辩论发言压缩成核心论点摘要，减少 token 消耗
+
+        Args:
+            topic: 辩题
+            speeches_to_summarize: 需要被摘要的发言列表
+            existing_summary: 已有的摘要（如果有，就整合更新）
+        """
+        prompt = prompts.get_summary_prompt(topic, self.side, self.stance_detail, speeches_to_summarize, existing_summary)
+        system = (
+            f"你是辩论赛的{self.side_name}记忆压缩助手，负责把历史发言压缩成核心论点摘要。"
+            f"你的立场是：{self.stance_detail}。摘要必须保持立场坚定，不能出现中立或妥协表述。"
+        )
+        result = self.llm.chat(prompt, system_prompt=system, temperature=0.3)
+        return result

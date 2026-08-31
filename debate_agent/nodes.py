@@ -43,6 +43,12 @@ def node_opening_negative(state: DebateState) -> DebateState:
 
 def node_clash_affirmative(state: DebateState) -> DebateState:
     """正方攻辩"""
+    # V1.5 修复：轮数增加从条件边函数移到这里
+    # 条件边函数(router)对state的修改不会被保留，所以必须在节点里做
+    # 如果不是第1轮攻辩（已有正方攻辩记录），轮数+1
+    if state["affirmative_clashes"]:
+        state["current_round"] += 1
+
     round_num = state["current_round"]
 
     # 确定"对方上一轮发言"和"自己上一轮发言"
@@ -123,9 +129,9 @@ def node_reflection(state: DebateState) -> DebateState:
     if not state.get("reflection_enabled"):
         return state
 
-    # 收集双方到目前为止的所有发言
-    aff_speeches = [state["affirmative_opening"]] + state["affirmative_clashes"]
-    neg_speeches = [state["negative_opening"]] + state["negative_clashes"]
+    # 收集双方到目前为止的所有发言（V1.5：如果有摘要，久远部分用摘要代替）
+    aff_speeches = _get_side_speeches_for_context(state, "affirmative")
+    neg_speeches = _get_side_speeches_for_context(state, "negative")
 
     # 正方反思（参考自己的所有发言 + 反方的所有发言）
     aff_debater = DebaterAgent("affirmative", state["affirmative_stance"])
@@ -157,22 +163,99 @@ def should_continue_clash(state: DebateState) -> str:
     """
     条件边函数：判断是否继续攻辩
     返回下一个节点的名称
+    注意：条件边函数(router)对state的修改不会被保留，所以这里只做判断，不修改state
+    轮数增加已移到 node_clash_affirmative 节点开头
     """
     if state["current_round"] >= state["max_rounds"]:
         # 攻辩结束，进入驳论
         return "rebuttal_affirmative"
     else:
-        # 继续下一轮攻辩，轮数+1
-        state["current_round"] += 1
+        # 继续下一轮攻辩（轮数+1在 node_clash_affirmative 开头处理）
         return "clash_affirmative"
+
+
+# ===== V1.5 记忆摘要压缩节点 =====
+
+def _get_side_speeches_for_context(state: DebateState, side: str, include_rebuttal: bool = False) -> list:
+    """
+    V1.5 辅助函数：获取一方的发言列表，用于上下文拼接
+    如果启用了摘要且有摘要，久远部分用摘要代替，减少 token 消耗
+
+    Args:
+        state: 辩论状态
+        side: "affirmative" 正方 / "negative" 反方
+        include_rebuttal: 是否包含驳论发言（总结阶段需要）
+    """
+    prefix = side
+    threshold = state.get("summary_threshold", 2)
+
+    # 基础发言：立论 + 所有攻辩
+    speeches = []
+    if state.get(f"{prefix}_opening"):
+        speeches.append(state[f"{prefix}_opening"])
+    speeches.extend(state.get(f"{prefix}_clashes", []))
+
+    # 驳论（总结阶段需要）
+    if include_rebuttal and state.get(f"{prefix}_rebuttal"):
+        speeches.append(state[f"{prefix}_rebuttal"])
+
+    # 如果启用了摘要且有摘要，且发言数超过阈值，久远部分用摘要代替
+    if state.get("summary_enabled") and state.get(f"{prefix}_summary") and len(speeches) > threshold:
+        recent_speeches = speeches[-threshold:]
+        return [f"【历史发言摘要（已压缩）】\n{state[f'{prefix}_summary']}"] + recent_speeches
+
+    return speeches
+
+
+def node_summary(state: DebateState) -> DebateState:
+    """
+    V1.5 记忆摘要压缩节点
+    每轮反思后执行，如果当前轮数超过阈值，就对久远的发言做摘要
+    摘要会在后续的反思/驳论/总结阶段代替久远的原始发言，减少 token 消耗
+    """
+    if not state.get("summary_enabled"):
+        return state
+
+    current_round = state["current_round"]
+    threshold = state.get("summary_threshold", 2)
+
+    # 轮数没超过阈值，不需要摘要
+    if current_round <= threshold:
+        return state
+
+    # 需要摘要的发言：立论 + 前 (current_round - threshold) 轮攻辩
+    rounds_to_summarize = current_round - threshold
+
+    print(f"[摘要压缩] 第 {current_round} 轮，对前 {rounds_to_summarize} 轮发言做摘要压缩...")
+
+    # 正方摘要
+    aff_speeches = [state["affirmative_opening"]] + state["affirmative_clashes"][:rounds_to_summarize]
+    aff_debater = DebaterAgent("affirmative", state["affirmative_stance"])
+    aff_summary = aff_debater.summarize(state["topic"], aff_speeches, state.get("affirmative_summary"))
+    state["affirmative_summary"] = aff_summary
+
+    # 反方摘要
+    neg_speeches = [state["negative_opening"]] + state["negative_clashes"][:rounds_to_summarize]
+    neg_debater = DebaterAgent("negative", state["negative_stance"])
+    neg_summary = neg_debater.summarize(state["topic"], neg_speeches, state.get("negative_summary"))
+    state["negative_summary"] = neg_summary
+
+    state["full_transcript"].append({
+        "speaker": "system",
+        "role": "【系统】记忆摘要压缩",
+        "content": f"已对前 {rounds_to_summarize} 轮发言完成摘要压缩，后续阶段将使用摘要+最近{threshold}轮原始发言。",
+    })
+
+    return state
 
 
 # ===== 驳论阶段 =====
 
 def node_rebuttal_affirmative(state: DebateState) -> DebateState:
     """正方驳论"""
-    aff_all = [state["affirmative_opening"]] + state["affirmative_clashes"]
-    neg_all = [state["negative_opening"]] + state["negative_clashes"]
+    # V1.5：如果有摘要，久远部分用摘要代替
+    aff_all = _get_side_speeches_for_context(state, "affirmative")
+    neg_all = _get_side_speeches_for_context(state, "negative")
     reflection = state.get("affirmative_reflection") if state.get("reflection_enabled") else None
 
     debater = DebaterAgent("affirmative", state["affirmative_stance"])
@@ -189,8 +272,9 @@ def node_rebuttal_affirmative(state: DebateState) -> DebateState:
 
 def node_rebuttal_negative(state: DebateState) -> DebateState:
     """反方驳论"""
-    aff_all = [state["affirmative_opening"]] + state["affirmative_clashes"]
-    neg_all = [state["negative_opening"]] + state["negative_clashes"]
+    # V1.5：如果有摘要，久远部分用摘要代替
+    aff_all = _get_side_speeches_for_context(state, "affirmative")
+    neg_all = _get_side_speeches_for_context(state, "negative")
     reflection = state.get("negative_reflection") if state.get("reflection_enabled") else None
 
     debater = DebaterAgent("negative", state["negative_stance"])
@@ -210,8 +294,9 @@ def node_rebuttal_negative(state: DebateState) -> DebateState:
 
 def node_closing_affirmative(state: DebateState) -> DebateState:
     """正方总结"""
-    aff_all = [state["affirmative_opening"]] + state["affirmative_clashes"] + [state["affirmative_rebuttal"]]
-    neg_all = [state["negative_opening"]] + state["negative_clashes"] + [state["negative_rebuttal"]]
+    # V1.5：如果有摘要，久远部分用摘要代替；总结阶段包含驳论
+    aff_all = _get_side_speeches_for_context(state, "affirmative", include_rebuttal=True)
+    neg_all = _get_side_speeches_for_context(state, "negative", include_rebuttal=True)
 
     debater = DebaterAgent("affirmative", state["affirmative_stance"])
     speech = debater.closing(state["topic"], aff_all, neg_all)
@@ -227,8 +312,9 @@ def node_closing_affirmative(state: DebateState) -> DebateState:
 
 def node_closing_negative(state: DebateState) -> DebateState:
     """反方总结"""
-    aff_all = [state["affirmative_opening"]] + state["affirmative_clashes"] + [state["affirmative_rebuttal"]]
-    neg_all = [state["negative_opening"]] + state["negative_clashes"] + [state["negative_rebuttal"]]
+    # V1.5：如果有摘要，久远部分用摘要代替；总结阶段包含驳论
+    aff_all = _get_side_speeches_for_context(state, "affirmative", include_rebuttal=True)
+    neg_all = _get_side_speeches_for_context(state, "negative", include_rebuttal=True)
 
     debater = DebaterAgent("negative", state["negative_stance"])
     speech = debater.closing(state["topic"], neg_all, aff_all)

@@ -243,6 +243,54 @@ def get_closing_prompt(
 直接输出总结陈词。"""
 
 
+def get_summary_prompt(
+    topic: str,
+    side: str,
+    stance_detail: str,
+    speeches_to_summarize: List[str],
+    existing_summary: str = None,
+) -> str:
+    """
+    V1.5 记忆摘要压缩 prompt
+    把久远的辩论发言压缩成核心论点摘要，减少 token 消耗
+    如果已有摘要，就把新发言追加整合到已有摘要里
+
+    Args:
+        topic: 辩题
+        side: "affirmative" 正方 / "negative" 反方
+        stance_detail: 该方立场的明确表述
+        speeches_to_summarize: 需要被摘要的发言列表（立论 + 久远轮次的攻辩）
+        existing_summary: 已有的摘要（如果有，就整合更新）
+    """
+    side_name = "正方" if side == "affirmative" else "反方"
+
+    speeches_text = "\n---\n".join([f"第{i+1}段：{s[:500]}" for i, s in enumerate(speeches_to_summarize)])
+
+    existing_part = ""
+    if existing_summary:
+        existing_part = f"""
+【已有摘要（请把新发言整合进去，更新这份摘要）】
+{existing_summary}
+"""
+
+    return f"""你是辩论赛的{side_name}记忆压缩助手。你的立场是：{stance_detail}。
+
+辩题：{topic}
+{existing_part}
+【需要压缩的发言】
+{speeches_text}
+
+请把以上发言压缩成一份核心论点摘要，要求：
+1. 保留该方的核心论点、关键论据、重要数据和案例
+2. 保留该方的立场声明和核心主张
+3. 去掉重复表述、过渡性语言、客套话
+4. 字数控制在 200-300 字
+5. 按"核心立场→主要论点→关键论据"的结构组织
+6. 必须保持立场坚定，不能在摘要中出现中立或妥协表述
+
+直接输出摘要内容，不要加其他说明。"""
+
+
 def get_judge_prompt(topic: str, affirmative_full: str, negative_full: str) -> str:
     """
     评委评分 prompt

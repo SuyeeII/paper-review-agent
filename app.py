@@ -28,6 +28,11 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirma
         nonlocal final_state
         final_state = state
 
+        # V1.5：打印步骤日志，方便定位卡在哪一步
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] 节点完成: {node_name} | 当前轮次: {state.get('current_round', 0)} | 阶段: {state.get('phase', '')}")
+
         # 找到最新的发言
         if state["full_transcript"]:
             latest = state["full_transcript"][-1]
@@ -42,6 +47,7 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool, affirma
             "clash_affirmative": f"正方第{state.get('current_round', 1)}轮攻辩中...",
             "clash_negative": f"反方第{state.get('current_round', 1)}轮攻辩中...",
             "reflection": "双方自我反思中...",
+            "summary": "记忆摘要压缩中...",
             "rebuttal_affirmative": "正方驳论中...",
             "rebuttal_negative": "反方驳论中...",
             "closing_affirmative": "正方总结陈词中...",
