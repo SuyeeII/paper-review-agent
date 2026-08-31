@@ -63,23 +63,23 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
 
         # 阶段名称映射
         stage_names = {
-            "opening_affirmative": "正方立论中...",
-            "opening_negative": "反方立论中...",
-            "clash_affirmative": f"正方第{state.get('current_round', 1)}轮攻辩中...",
-            "clash_negative": f"反方第{state.get('current_round', 1)}轮攻辩中...",
+            "opening_affirmative": "支持方立论中...",
+            "opening_negative": "反对方立论中...",
+            "clash_affirmative": f"支持方第{state.get('current_round', 1)}轮分析中...",
+            "clash_negative": f"反对方第{state.get('current_round', 1)}轮分析中...",
             "reflection": "双方自我反思中...",
             "summary": "记忆摘要压缩中...",
-            "rebuttal_affirmative": "正方驳论中...",
-            "rebuttal_negative": "反方驳论中...",
-            "closing_affirmative": "正方总结陈词中...",
-            "closing_negative": "反方总结陈词中...",
-            "judge": "评委评分中...",
+            "rebuttal_affirmative": "支持方反驳中...",
+            "rebuttal_negative": "反对方反驳中...",
+            "closing_affirmative": "支持方总结中...",
+            "closing_negative": "反对方总结中...",
+            "judge": "综合评估中...",
         }
-        progress(0.5, desc=stage_names.get(node_name, "辩论进行中..."))
+        progress(0.5, desc=stage_names.get(node_name, "分析进行中..."))
 
-    # 运行辩论
+    # 运行分析
     try:
-        progress(0.1, desc="初始化辩论系统...")
+        progress(0.1, desc="初始化决策分析...")
         final_state = run_debate(
             topic=topic.strip(),
             max_rounds=int(max_rounds),
@@ -93,7 +93,7 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
             web_search_enabled=web_search_enabled,
         )
     except Exception as e:
-        error_msg = f"❌ 辩论运行出错：{str(e)}"
+        error_msg = f"❌ 分析运行出错：{str(e)}"
         yield error_msg, "", "", ""
         return
 
@@ -105,12 +105,12 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
     # 整理评分结果
     score = final_state.get("judge_score", {})
     if score:
-        winner = "🏆 正方获胜" if score.get("winner") == "affirmative" else "🏆 反方获胜"
-        score_text = f"""## 📊 评委评分结果
+        winner = "🏆 支持方观点更有说服力" if score.get("winner") == "affirmative" else "🏆 反对方观点更有说服力"
+        score_text = f"""## 📊 决策评估结果
 
 **{winner}**
 
-| 维度 | 正方 | 反方 |
+| 评估维度 | 支持方 | 反对方 |
 |------|------|------|
 """
         for dim in ["立论深度", "逻辑论证", "论据质量", "反驳能力", "应变能力", "语言表达", "整体配合", "立场坚定性"]:
@@ -120,50 +120,59 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
 
         score_text += f"| **总分** | **{score.get('affirmative_total', 0)}** | **{score.get('negative_total', 0)}** |\n\n"
         score_text += f"**分差**：{score.get('margin', 0)}\n\n"
-        score_text += f"### 评委点评\n\n{score.get('comment', '')}\n"
+        score_text += f"### 综合评估\n\n{score.get('comment', '')}\n"
     else:
-        score_text = "评分结果生成失败"
+        score_text = "评估结果生成失败"
 
     # 完整文本
     full_text = format_debate_result(final_state)
 
-    progress(1.0, desc="✅ 辩论完成！")
-    yield full_transcript, score_text, full_text, "✅ 辩论完成！"
+    progress(1.0, desc="✅ 分析完成！")
+    yield full_transcript, score_text, full_text, "✅ 分析完成！"
 
 
 # ===== Gradio 界面 =====
 
-with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="多 Agent 决策助手", theme=gr.themes.Soft()) as demo:
     gr.Markdown("""
-    # 🎤 多 Agent 辩论系统
+    # 🧠 多 Agent 决策助手
 
-    基于 LangGraph 的多智能体辩论系统，支持**立论 → 攻辩（多轮）→ 自我反思 → 驳论 → 总结 → 评委评分**完整流程。
+    基于 LangGraph 的多智能体决策辅助系统，输入任何你纠结的决策问题，AI 正反方自动进行多轮攻防分析，最后给出综合评估。
 
-    核心算法亮点：**Self-Reflection 自我反思机制** —— 每轮攻辩后，双方 Agent 会批判自己之前的论证，找出漏洞并在下一轮修正。
+    **适用场景**：职业选择、购房购车、留学考研、跳槽转行、投资决策等任何需要权衡利弊的决策。
+
+    核心算法亮点：**Self-Reflection 自我反思机制** —— 每轮分析后，双方 Agent 会批判自己之前的论证，找出漏洞并在下一轮修正。
     """)
+
+    # 示例决策问题快捷按钮
+    with gr.Row():
+        example_btn1 = gr.Button("💼 要不要考公？", size="sm")
+        example_btn2 = gr.Button("🏠 这套房该不该买？", size="sm")
+        example_btn3 = gr.Button("🔄 要不要转行做算法？", size="sm")
+        example_btn4 = gr.Button("🎓 要不要读研？", size="sm")
 
     # ===== 输入区（无灰色底框，紧凑排列） =====
     topic_input = gr.Textbox(
-        label="辩题",
-        placeholder="例如：AI 会不会取代程序员？\n猫和狗谁更适合当宠物？\n年轻人应不应该躺平？",
+        label="决策问题",
+        placeholder="输入你纠结的决策问题，例如：\n要不要考公？\n这套房该不该买？\n要不要转行做算法？\n去大厂还是去选调？",
         lines=2,
-        value="AI 会不会取代程序员？",
+        value="要不要考公？",
     )
     with gr.Row():
         affirmative_stance_input = gr.Textbox(
-            label="正方立场（选填，建议填写防跑偏）",
-            placeholder="例如：AI会取代程序员",
+            label="支持方立场（选填，建议填写防跑偏）",
+            placeholder="例如：应该考公",
             lines=1,
         )
         negative_stance_input = gr.Textbox(
-            label="反方立场（选填，建议填写防跑偏）",
-            placeholder="例如：AI不会取代程序员",
+            label="反对方立场（选填，建议填写防跑偏）",
+            placeholder="例如：不应该考公",
             lines=1,
         )
     with gr.Row():
         rounds_slider = gr.Slider(
             minimum=1, maximum=5, value=3, step=1,
-            label="攻辩轮数",
+            label="分析轮数",
         )
         reflection_checkbox = gr.Checkbox(
             value=True,
@@ -171,29 +180,29 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
         )
         web_search_checkbox = gr.Checkbox(
             value=False,
-            label="联网检索（V3 Tavily）",
+            label="联网检索（Tavily）",
         )
         rag_checkbox = gr.Checkbox(
             value=False,
-            label="离线论据检索（V2 RAG）",
+            label="离线论据检索（RAG）",
         )
 
     # RAG 文件上传（默认隐藏，勾选后显示）
     with gr.Row(visible=False) as rag_config:
         aff_evidence_input = gr.File(
-            label="📄 正方论据文件（可多选，支持 .txt/.md）",
+            label="📄 支持方论据文件（可多选，支持 .txt/.md）",
             file_count="multiple",
             file_types=[".txt", ".md"],
         )
         neg_evidence_input = gr.File(
-            label="📄 反方论据文件（可多选，支持 .txt/.md）",
+            label="📄 反对方论据文件（可多选，支持 .txt/.md）",
             file_count="multiple",
             file_types=[".txt", ".md"],
         )
     rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
 
-    # 开始辩论按钮占满整行，状态显示在按钮下方
-    run_button = gr.Button("🚀 开始辩论", variant="primary", size="lg")
+    # 开始分析按钮占满整行，状态显示在按钮下方
+    run_button = gr.Button("🚀 开始分析", variant="primary", size="lg")
     status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False, lines=1)
 
     # ===== 输出区 =====
@@ -203,12 +212,12 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
 
     with gr.Row():
         with gr.Column(scale=3):
-            transcript_md = gr.Markdown("辩论开始后这里会实时展示双方发言...", label="📜 辩论实录")
+            transcript_md = gr.Markdown("分析开始后这里会实时展示双方论证过程...", label="📜 决策分析过程")
             toggle_btn = gr.Button("展开全部", size="sm", visible=False)
         with gr.Column(scale=2):
-            score_md = gr.Markdown("评分结果会在辩论结束后展示...", label="📊 评分结果")
+            score_md = gr.Markdown("评估结果会在分析结束后展示...", label="📊 决策评估")
 
-    full_text_box = gr.Textbox(label="完整辩论记录（可全选复制）", lines=6, interactive=False)
+    full_text_box = gr.Textbox(label="完整分析记录（可全选复制）", lines=6, interactive=False)
 
     # 展开/收起切换函数
     def toggle_transcript(full_text, is_expanded):
@@ -234,9 +243,9 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
 
     # 辩论完成后自动折叠 transcript（只显示前面部分），显示展开按钮
     def on_status_change(status_text, full_transcript):
-        if status_text and "辩论完成" in status_text and full_transcript and len(full_transcript) > 1000:
-            # 辩论完成，折叠成只显示前面1000字
-            preview = full_transcript[:1000] + "\n\n...（后面的内容已折叠，点击下方「展开全部」查看完整辩论记录）"
+        if status_text and "分析完成" in status_text and full_transcript and len(full_transcript) > 1000:
+            # 分析完成，折叠成只显示前面1000字
+            preview = full_transcript[:1000] + "\n\n...（后面的内容已折叠，点击下方「展开全部」查看完整分析记录）"
             return preview, full_transcript, False, gr.update(visible=True, value="展开全部")
         return full_transcript, full_transcript, False, gr.update(visible=False)
 
@@ -252,6 +261,14 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
         inputs=[full_transcript_state, is_expanded_state],
         outputs=[transcript_md, is_expanded_state, toggle_btn],
     )
+
+    # 示例问题快捷按钮
+    def fill_example(text):
+        return text
+    example_btn1.click(fn=fill_example, inputs=[gr.State("要不要考公？")], outputs=[topic_input])
+    example_btn2.click(fn=fill_example, inputs=[gr.State("这套房该不该买？")], outputs=[topic_input])
+    example_btn3.click(fn=fill_example, inputs=[gr.State("要不要转行做算法？")], outputs=[topic_input])
+    example_btn4.click(fn=fill_example, inputs=[gr.State("要不要读研？")], outputs=[topic_input])
 
     # 页脚
     gr.Markdown("""
