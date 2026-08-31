@@ -53,26 +53,23 @@ def parse_paper_file(file_obj) -> str:
         return f"⚠️ 文件解析失败：{str(e)}，请尝试直接粘贴论文文本。"
 
 
-def on_paper_file_upload(file_obj, current_text: str) -> str:
+def on_paper_file_upload(file_obj) -> str:
     """
-    文件上传后，把解析的内容替换文本框内容
-    直接替换，避免和已有内容混在一起导致审稿对象混乱
+    文件上传后，解析论文内容并返回
+    内容存在后台State里，不显示在界面上
     """
     parsed = parse_paper_file(file_obj)
-    if not parsed:
-        return current_text
-    # 直接替换文本框内容，不追加
-    return parsed
+    return parsed if parsed else ""
 
 
-def run_review_ui(topic: str, reflection_enabled: bool):
+def run_review_ui(paper_content: str, reflection_enabled: bool):
     """
     Gradio 界面的审稿运行函数
     4个维度审稿人并行评审 → 自我反思修正 → 主编汇总
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
-    if not topic or not topic.strip():
-        yield "请输入论文内容，或上传论文文件！", "", "", "", "", "", None, ""
+    if not paper_content or not paper_content.strip():
+        yield "请先上传论文文件（PDF / TXT / MD）！", "", "", "", "", "", None, "❌ 未上传论文文件，请先上传"
         return
 
     # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）
@@ -81,7 +78,7 @@ def run_review_ui(topic: str, reflection_enabled: bool):
     # 运行审稿（同步执行，因为LangGraph invoke是同步的）
     try:
         final_state = run_review(
-            topic=topic.strip(),
+            topic=paper_content.strip(),
             reflection_enabled=reflection_enabled,
         )
     except Exception as e:
@@ -125,25 +122,20 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
 
     **审稿维度**：创新性 · 方法论 · 实验可靠性与可复现性 · 写作表达
 
-    > 💡 建议上传完整论文 PDF，或直接粘贴论文全文，审稿效果更好。
+    > 💡 请上传完整论文 PDF（或 TXT/MD），系统会自动解析全文进行审稿。
     """)
 
-    # ===== 输入区 =====
-    topic_input = gr.Textbox(
-        label="论文标题/摘要/全文",
-        placeholder="粘贴论文标题、摘要或全文，或上传下方论文文件...",
-        lines=6,
-        value="",
-    )
+    # ===== 输入区（只保留文件上传，去掉手动输入框）=====
+    paper_content_state = gr.State("")  # 后台保存解析后的论文文本
     paper_file_input = gr.File(
-        label="📄 上传论文文件（PDF / TXT / MD，上传后自动解析填入上方文本框）",
+        label="📄 上传论文文件（PDF / TXT / MD，必填）",
         file_count="single",
         file_types=[".pdf", ".txt", ".md"],
     )
     paper_file_input.change(
         fn=on_paper_file_upload,
-        inputs=[paper_file_input, topic_input],
-        outputs=[topic_input],
+        inputs=[paper_file_input],
+        outputs=[paper_content_state],
     )
 
     with gr.Row():
@@ -182,7 +174,7 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
     # 事件绑定
     run_button.click(
         fn=run_review_ui,
-        inputs=[topic_input, reflection_checkbox],
+        inputs=[paper_content_state, reflection_checkbox],
         outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
                  summary_md, export_file, status_text],
     )
