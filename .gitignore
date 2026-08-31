@@ -19,3 +19,4 @@ venv/
 *.swp
 .DS_Store
 Thumbs.db
+审稿报告_*.md
