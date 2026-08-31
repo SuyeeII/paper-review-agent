@@ -55,19 +55,14 @@ def parse_paper_file(file_obj) -> str:
 
 def on_paper_file_upload(file_obj, current_text: str) -> str:
     """
-    文件上传后，把解析的内容填入文本框
-    如果文本框已有内容，追加在后面（用分隔线分开）
+    文件上传后，把解析的内容替换文本框内容
+    直接替换，避免和已有内容混在一起导致审稿对象混乱
     """
     parsed = parse_paper_file(file_obj)
     if not parsed:
         return current_text
-
-    if current_text and current_text.strip():
-        # 已有内容，追加在后面
-        return current_text + "\n\n---\n\n【上传文件内容】\n\n" + parsed
-    else:
-        # 文本框为空，直接填入
-        return parsed
+    # 直接替换文本框内容，不追加
+    return parsed
 
 
 def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
