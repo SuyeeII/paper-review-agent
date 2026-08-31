@@ -69,9 +69,10 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
     """
     Gradio 界面的审稿运行函数
     4个维度审稿人并行评审 → 自我反思修正 → 主编汇总
+    返回：论文结构解析、4个维度审稿意见、主编报告、完整记录、导出文件、状态
     """
     if not topic or not topic.strip():
-        yield "请输入论文内容，或上传论文文件！", "", "", ""
+        yield "请输入论文内容，或上传论文文件！", "", "", "", "", "", "", None, ""
         return
 
     # 阶段进度映射
@@ -103,37 +104,34 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
         )
     except Exception as e:
         error_msg = f"❌ 审稿运行出错：{str(e)}"
-        yield error_msg, "", "", ""
+        yield error_msg, "", "", "", "", "", "", None, ""
         return
 
-    # 整理4个维度审稿意见（左侧展示）
-    dimensions = [
-        ("创新性", final_state.get("innovation_final") or final_state.get("innovation_review") or ""),
-        ("方法论", final_state.get("methodology_final") or final_state.get("methodology_review") or ""),
-        ("实验可靠性与可复现性", final_state.get("experiment_final") or final_state.get("experiment_review") or ""),
-        ("写作表达", final_state.get("writing_final") or final_state.get("writing_review") or ""),
-    ]
-
-    review_text = "# 📋 四维审稿意见\n\n"
-
-    # 论文结构解析结果（放在最前面）
-    if final_state.get("paper_structure"):
-        review_text += "## 【论文结构解析】\n\n"
-        review_text += final_state["paper_structure"]
-        review_text += "\n\n---\n\n"
-
-    for dim_name, review in dimensions:
-        if review:
-            review_text += f"## 【{dim_name}审稿人】\n\n{review}\n\n---\n\n"
-
-    # 主编综合审稿报告（右侧展示）
+    # 提取各部分内容
+    structure_text = final_state.get("paper_structure") or "论文结构解析失败"
+    innovation_text = final_state.get("innovation_final") or final_state.get("innovation_review") or "创新性审稿失败"
+    methodology_text = final_state.get("methodology_final") or final_state.get("methodology_review") or "方法论审稿失败"
+    experiment_text = final_state.get("experiment_final") or final_state.get("experiment_review") or "实验审稿失败"
+    writing_text = final_state.get("writing_final") or final_state.get("writing_review") or "写作审稿失败"
     summary_text = final_state.get("editor_summary") or "主编汇总生成失败"
 
     # 完整文本
     full_text = format_review_result(final_state)
 
+    # 导出为markdown文件
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    export_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"审稿报告_{timestamp}.md")
+    try:
+        with open(export_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        print(f"[导出] 审稿报告已保存到: {export_path}")
+    except Exception as e:
+        print(f"[导出] 保存失败: {e}")
+        export_path = None
+
     progress(1.0, desc="✅ 审稿完成！")
-    yield review_text, summary_text, full_text, "✅ 审稿完成！"
+    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, full_text, export_path, "✅ 审稿完成！"
 
 
 # ===== Gradio 界面 =====
@@ -179,18 +177,36 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
 
     # ===== 输出区 =====
     with gr.Row():
+        # 左侧：分维度Tab展示
         with gr.Column(scale=3):
-            review_md = gr.Markdown("审稿开始后这里会展示四维审稿意见...", label="📋 四维审稿意见")
+            with gr.Tabs():
+                with gr.Tab("📄 论文结构解析"):
+                    structure_md = gr.Markdown("审稿开始后这里会展示论文结构解析结果...")
+                with gr.Tab("💡 创新性"):
+                    innovation_md = gr.Markdown("审稿开始后这里会展示创新性审稿意见...")
+                with gr.Tab("🔧 方法论"):
+                    methodology_md = gr.Markdown("审稿开始后这里会展示方法论审稿意见...")
+                with gr.Tab("🧪 实验与可复现性"):
+                    experiment_md = gr.Markdown("审稿开始后这里会展示实验审稿意见...")
+                with gr.Tab("✍️ 写作表达"):
+                    writing_md = gr.Markdown("审稿开始后这里会展示写作审稿意见...")
+        # 右侧：主编综合报告
         with gr.Column(scale=2):
             summary_md = gr.Markdown("审稿结果会在审稿结束后展示...", label="📊 主编综合审稿报告")
 
-    full_text_box = gr.Textbox(label="完整审稿记录（可全选复制）", lines=6, interactive=False)
+    # 下方：完整记录 + 导出下载
+    with gr.Row():
+        with gr.Column(scale=3):
+            full_text_box = gr.Textbox(label="完整审稿记录（可全选复制）", lines=6, interactive=False)
+        with gr.Column(scale=1):
+            export_file = gr.File(label="📥 导出审稿报告（Markdown）", interactive=False)
 
     # 事件绑定
     run_button.click(
         fn=run_review_ui,
         inputs=[topic_input, reflection_checkbox],
-        outputs=[review_md, summary_md, full_text_box, status_text],
+        outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
+                 summary_md, full_text_box, export_file, status_text],
     )
 
     # 页脚
