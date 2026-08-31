@@ -142,69 +142,85 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
     核心算法亮点：**Self-Reflection 自我反思机制** —— 每轮攻辩后，双方 Agent 会批判自己之前的论证，找出漏洞并在下一轮修正。
     """)
 
-    # ===== 输入区（紧凑排列） =====
-    with gr.Group():
-        topic_input = gr.Textbox(
-            label="辩题",
-            placeholder="例如：AI 会不会取代程序员？\n猫和狗谁更适合当宠物？\n年轻人应不应该躺平？",
-            lines=2,
-            value="AI 会不会取代程序员？",
+    # ===== 输入区（无灰色底框，紧凑排列） =====
+    topic_input = gr.Textbox(
+        label="辩题",
+        placeholder="例如：AI 会不会取代程序员？\n猫和狗谁更适合当宠物？\n年轻人应不应该躺平？",
+        lines=2,
+        value="AI 会不会取代程序员？",
+    )
+    with gr.Row():
+        affirmative_stance_input = gr.Textbox(
+            label="正方立场（选填，建议填写防跑偏）",
+            placeholder="例如：AI会取代程序员",
+            lines=1,
         )
-        with gr.Row():
-            affirmative_stance_input = gr.Textbox(
-                label="正方立场（选填，建议填写防跑偏）",
-                placeholder="例如：AI会取代程序员",
-                lines=1,
-            )
-            negative_stance_input = gr.Textbox(
-                label="反方立场（选填，建议填写防跑偏）",
-                placeholder="例如：AI不会取代程序员",
-                lines=1,
-            )
-        with gr.Row():
-            rounds_slider = gr.Slider(
-                minimum=1, maximum=5, value=3, step=1,
-                label="攻辩轮数",
-            )
-            reflection_checkbox = gr.Checkbox(
-                value=True,
-                label="自我反思（推荐）",
-            )
-            web_search_checkbox = gr.Checkbox(
-                value=False,
-                label="联网检索（V3 Tavily）",
-            )
-            rag_checkbox = gr.Checkbox(
-                value=False,
-                label="离线论据检索（V2 RAG）",
-            )
+        negative_stance_input = gr.Textbox(
+            label="反方立场（选填，建议填写防跑偏）",
+            placeholder="例如：AI不会取代程序员",
+            lines=1,
+        )
+    with gr.Row():
+        rounds_slider = gr.Slider(
+            minimum=1, maximum=5, value=3, step=1,
+            label="攻辩轮数",
+        )
+        reflection_checkbox = gr.Checkbox(
+            value=True,
+            label="自我反思（推荐）",
+        )
+        web_search_checkbox = gr.Checkbox(
+            value=False,
+            label="联网检索（V3 Tavily）",
+        )
+        rag_checkbox = gr.Checkbox(
+            value=False,
+            label="离线论据检索（V2 RAG）",
+        )
 
-        # RAG 文件上传（默认隐藏，勾选后显示）
-        with gr.Row(visible=False) as rag_config:
-            aff_evidence_input = gr.File(
-                label="📄 正方论据文件（可多选，支持 .txt/.md）",
-                file_count="multiple",
-                file_types=[".txt", ".md"],
-            )
-            neg_evidence_input = gr.File(
-                label="📄 反方论据文件（可多选，支持 .txt/.md）",
-                file_count="multiple",
-                file_types=[".txt", ".md"],
-            )
-        rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
+    # RAG 文件上传（默认隐藏，勾选后显示）
+    with gr.Row(visible=False) as rag_config:
+        aff_evidence_input = gr.File(
+            label="📄 正方论据文件（可多选，支持 .txt/.md）",
+            file_count="multiple",
+            file_types=[".txt", ".md"],
+        )
+        neg_evidence_input = gr.File(
+            label="📄 反方论据文件（可多选，支持 .txt/.md）",
+            file_count="multiple",
+            file_types=[".txt", ".md"],
+        )
+    rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
 
-        with gr.Row():
-            run_button = gr.Button("🚀 开始辩论", variant="primary", size="lg")
-            status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False, scale=2)
+    # 开始辩论按钮占满整行，状态显示在按钮下方
+    run_button = gr.Button("🚀 开始辩论", variant="primary", size="lg")
+    status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False, lines=1)
 
     # ===== 输出区 =====
+    # 用 State 保存完整 transcript 和展开状态
+    full_transcript_state = gr.State("")
+    is_expanded_state = gr.State(False)
+
     with gr.Row():
         with gr.Column(scale=3):
             transcript_md = gr.Markdown("辩论开始后这里会实时展示双方发言...", label="📜 辩论实录")
+            toggle_btn = gr.Button("展开全部", size="sm", visible=False)
         with gr.Column(scale=2):
             score_md = gr.Markdown("评分结果会在辩论结束后展示...", label="📊 评分结果")
 
     full_text_box = gr.Textbox(label="完整辩论记录（可全选复制）", lines=6, interactive=False)
+
+    # 展开/收起切换函数
+    def toggle_transcript(full_text, is_expanded):
+        if is_expanded:
+            # 当前是展开状态，点击后收起
+            preview = full_text[-2000:] if len(full_text) > 2000 else full_text
+            if len(full_text) > 2000:
+                preview = "...（已折叠，点击展开全部查看完整内容）\n\n" + preview
+            return preview, False, "展开全部"
+        else:
+            # 当前是收起状态，点击后展开
+            return full_text, True, "收起"
 
     # 事件绑定
     run_button.click(
@@ -214,6 +230,27 @@ with gr.Blocks(title="多 Agent 辩论系统", theme=gr.themes.Soft()) as demo:
                 rag_checkbox, aff_evidence_input, neg_evidence_input,
                 web_search_checkbox],
         outputs=[transcript_md, score_md, full_text_box, status_text],
+    )
+
+    # 辩论完成后自动折叠 transcript（只显示最新部分），显示展开按钮
+    def on_status_change(status_text, full_transcript):
+        if status_text and "辩论完成" in status_text and full_transcript and len(full_transcript) > 2000:
+            # 辩论完成，折叠成只显示最后2000字
+            preview = "...（已折叠，点击下方「展开全部」查看完整辩论记录）\n\n" + full_transcript[-2000:]
+            return preview, full_transcript, False, gr.update(visible=True, value="展开全部")
+        return full_transcript, full_transcript, False, gr.update(visible=False)
+
+    status_text.change(
+        fn=on_status_change,
+        inputs=[status_text, transcript_md],
+        outputs=[transcript_md, full_transcript_state, is_expanded_state, toggle_btn],
+    )
+
+    # 展开/收起按钮
+    toggle_btn.click(
+        fn=toggle_transcript,
+        inputs=[full_transcript_state, is_expanded_state],
+        outputs=[transcript_md, is_expanded_state, toggle_btn],
     )
 
     # 页脚
