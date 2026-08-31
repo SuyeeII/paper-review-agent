@@ -63,23 +63,23 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
 
         # 阶段名称映射
         stage_names = {
-            "opening_affirmative": "支持方立论中...",
-            "opening_negative": "反对方立论中...",
-            "clash_affirmative": f"支持方第{state.get('current_round', 1)}轮分析中...",
-            "clash_negative": f"反对方第{state.get('current_round', 1)}轮分析中...",
-            "reflection": "双方自我反思中...",
+            "opening_affirmative": "多方立论中...",
+            "opening_negative": "空方立论中...",
+            "clash_affirmative": f"多方第{state.get('current_round', 1)}轮分析中...",
+            "clash_negative": f"空方第{state.get('current_round', 1)}轮分析中...",
+            "reflection": "多空双方自我反思中...",
             "summary": "记忆摘要压缩中...",
-            "rebuttal_affirmative": "支持方反驳中...",
-            "rebuttal_negative": "反对方反驳中...",
-            "closing_affirmative": "支持方总结中...",
-            "closing_negative": "反对方总结中...",
-            "judge": "综合评估中...",
+            "rebuttal_affirmative": "多方反驳中...",
+            "rebuttal_negative": "空方反驳中...",
+            "closing_affirmative": "多方总结中...",
+            "closing_negative": "空方总结中...",
+            "judge": "多空综合评估中...",
         }
-        progress(0.5, desc=stage_names.get(node_name, "分析进行中..."))
+        progress(0.5, desc=stage_names.get(node_name, "多空分析进行中..."))
 
     # 运行分析
     try:
-        progress(0.1, desc="初始化决策分析...")
+        progress(0.1, desc="初始化股票多空分析...")
         final_state = run_debate(
             topic=topic.strip(),
             max_rounds=int(max_rounds),
@@ -105,12 +105,12 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
     # 整理评分结果
     score = final_state.get("judge_score", {})
     if score:
-        winner = "🏆 支持方观点更有说服力" if score.get("winner") == "affirmative" else "🏆 反对方观点更有说服力"
-        score_text = f"""## 📊 决策评估结果
+        winner = "🏆 多方观点更有说服力" if score.get("winner") == "affirmative" else "🏆 空方观点更有说服力"
+        score_text = f"""## 📊 多空评估结果
 
 **{winner}**
 
-| 评估维度 | 支持方 | 反对方 |
+| 评估维度 | 多方 | 空方 |
 |------|------|------|
 """
         for dim in ["立论深度", "逻辑论证", "论据质量", "反驳能力", "应变能力", "语言表达", "整体配合", "立场坚定性"]:
@@ -120,7 +120,7 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
 
         score_text += f"| **总分** | **{score.get('affirmative_total', 0)}** | **{score.get('negative_total', 0)}** |\n\n"
         score_text += f"**分差**：{score.get('margin', 0)}\n\n"
-        score_text += f"### 综合评估\n\n{score.get('comment', '')}\n"
+        score_text += f"### 综合评估\n\n{score.get('comment', '')}\n\n> ⚠️ 以上为 AI 多空观点对比分析，不构成任何投资建议。\n"
     else:
         score_text = "评估结果生成失败"
 
@@ -133,45 +133,45 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
 
 # ===== Gradio 界面 =====
 
-with gr.Blocks(title="多 Agent 决策助手", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="智能股票多空分析助手", theme=gr.themes.Soft()) as demo:
     gr.Markdown("""
-    # 🧠 多 Agent 决策助手
+    # 📈 智能股票多空分析助手
 
-    基于 LangGraph 的多智能体决策辅助系统，输入任何你纠结的决策问题，AI 正反方自动进行多轮攻防分析，最后给出综合评估。
+    基于 LangGraph 的多智能体股票分析系统，输入股票名称/代码，AI 自动生成看多/看空双 Agent，进行多轮攻防分析与自我反思，最终输出多维度综合评估与风险提示。
 
-    **适用场景**：职业选择、购房购车、留学考研、跳槽转行、投资决策等任何需要权衡利弊的决策。
+    **核心机制**：多方 Agent 与空方 Agent 独立推理、多轮攻防，避免单一视角偏见；Self-Reflection 自我反思机制让每轮分析更深入。
 
-    核心算法亮点：**Self-Reflection 自我反思机制** —— 每轮分析后，双方 Agent 会批判自己之前的论证，找出漏洞并在下一轮修正。
+    > ⚠️ 本工具仅为多空观点对比分析辅助，不构成任何投资建议。
     """)
 
-    # 示例决策问题快捷按钮
+    # 示例股票快捷按钮
     with gr.Row():
-        example_btn1 = gr.Button("💼 要不要考公？", size="sm")
-        example_btn2 = gr.Button("🏠 这套房该不该买？", size="sm")
-        example_btn3 = gr.Button("🔄 要不要转行做算法？", size="sm")
-        example_btn4 = gr.Button("🎓 要不要读研？", size="sm")
+        example_btn1 = gr.Button("🍶 贵州茅台", size="sm")
+        example_btn2 = gr.Button("🔋 宁德时代", size="sm")
+        example_btn3 = gr.Button("🚗 比亚迪", size="sm")
+        example_btn4 = gr.Button("🐧 腾讯控股", size="sm")
 
     # ===== 输入区（无灰色底框，紧凑排列） =====
     topic_input = gr.Textbox(
-        label="决策问题",
-        placeholder="输入你纠结的决策问题，例如：\n要不要考公？\n这套房该不该买？\n要不要转行做算法？\n去大厂还是去选调？",
+        label="股票名称/代码",
+        placeholder="输入要分析的股票，例如：\n贵州茅台\n宁德时代\n比亚迪\n腾讯控股\n600519",
         lines=2,
-        value="要不要考公？",
+        value="贵州茅台",
     )
     with gr.Row():
         affirmative_stance_input = gr.Textbox(
-            label="支持方立场（选填，建议填写防跑偏）",
-            placeholder="例如：应该考公",
+            label="多方观点（选填，建议填写防跑偏）",
+            placeholder="例如：看好贵州茅台，业绩稳健增长",
             lines=1,
         )
         negative_stance_input = gr.Textbox(
-            label="反对方立场（选填，建议填写防跑偏）",
-            placeholder="例如：不应该考公",
+            label="空方观点（选填，建议填写防跑偏）",
+            placeholder="例如：看空贵州茅台，估值过高增速放缓",
             lines=1,
         )
     with gr.Row():
         rounds_slider = gr.Slider(
-            minimum=1, maximum=5, value=3, step=1,
+            minimum=1, maximum=5, value=2, step=1,
             label="分析轮数",
         )
         reflection_checkbox = gr.Checkbox(
@@ -179,30 +179,30 @@ with gr.Blocks(title="多 Agent 决策助手", theme=gr.themes.Soft()) as demo:
             label="自我反思（推荐）",
         )
         web_search_checkbox = gr.Checkbox(
-            value=False,
-            label="联网检索（Tavily）",
+            value=True,
+            label="联网检索（Tavily，推荐）",
         )
         rag_checkbox = gr.Checkbox(
             value=False,
-            label="离线论据检索（RAG）",
+            label="离线研报检索（RAG）",
         )
 
     # RAG 文件上传（默认隐藏，勾选后显示）
     with gr.Row(visible=False) as rag_config:
         aff_evidence_input = gr.File(
-            label="📄 支持方论据文件（可多选，支持 .txt/.md）",
+            label="📄 多方论据文件（可多选，支持 .txt/.md，如研报）",
             file_count="multiple",
             file_types=[".txt", ".md"],
         )
         neg_evidence_input = gr.File(
-            label="📄 反对方论据文件（可多选，支持 .txt/.md）",
+            label="📄 空方论据文件（可多选，支持 .txt/.md，如研报）",
             file_count="multiple",
             file_types=[".txt", ".md"],
         )
     rag_checkbox.change(lambda x: gr.update(visible=x), inputs=rag_checkbox, outputs=rag_config)
 
     # 开始分析按钮占满整行，状态显示在按钮下方
-    run_button = gr.Button("🚀 开始分析", variant="primary", size="lg")
+    run_button = gr.Button("🚀 开始多空分析", variant="primary", size="lg")
     status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False, lines=1)
 
     # ===== 输出区 =====
@@ -212,12 +212,12 @@ with gr.Blocks(title="多 Agent 决策助手", theme=gr.themes.Soft()) as demo:
 
     with gr.Row():
         with gr.Column(scale=3):
-            transcript_md = gr.Markdown("分析开始后这里会实时展示双方论证过程...", label="📜 决策分析过程")
+            transcript_md = gr.Markdown("分析开始后这里会实时展示多空双方论证过程...", label="📜 多空分析过程")
             toggle_btn = gr.Button("展开全部", size="sm", visible=False)
         with gr.Column(scale=2):
-            score_md = gr.Markdown("评估结果会在分析结束后展示...", label="📊 决策评估")
+            score_md = gr.Markdown("评估结果会在分析结束后展示...", label="📊 多空评估")
 
-    full_text_box = gr.Textbox(label="完整分析记录（可全选复制）", lines=6, interactive=False)
+    full_text_box = gr.Textbox(label="完整多空分析记录（可全选复制）", lines=6, interactive=False)
 
     # 展开/收起切换函数
     def toggle_transcript(full_text, is_expanded):
@@ -262,13 +262,13 @@ with gr.Blocks(title="多 Agent 决策助手", theme=gr.themes.Soft()) as demo:
         outputs=[transcript_md, is_expanded_state, toggle_btn],
     )
 
-    # 示例问题快捷按钮
+    # 示例股票快捷按钮
     def fill_example(text):
         return text
-    example_btn1.click(fn=fill_example, inputs=[gr.State("要不要考公？")], outputs=[topic_input])
-    example_btn2.click(fn=fill_example, inputs=[gr.State("这套房该不该买？")], outputs=[topic_input])
-    example_btn3.click(fn=fill_example, inputs=[gr.State("要不要转行做算法？")], outputs=[topic_input])
-    example_btn4.click(fn=fill_example, inputs=[gr.State("要不要读研？")], outputs=[topic_input])
+    example_btn1.click(fn=fill_example, inputs=[gr.State("贵州茅台")], outputs=[topic_input])
+    example_btn2.click(fn=fill_example, inputs=[gr.State("宁德时代")], outputs=[topic_input])
+    example_btn3.click(fn=fill_example, inputs=[gr.State("比亚迪")], outputs=[topic_input])
+    example_btn4.click(fn=fill_example, inputs=[gr.State("腾讯控股")], outputs=[topic_input])
 
     # 页脚
     gr.Markdown("""
