@@ -113,7 +113,7 @@ def run_debate_ui(topic: str, max_rounds: int, reflection_enabled: bool,
 | 评估维度 | 支持接受方 | 建议拒稿方 |
 |------|------|------|
 """
-        for dim in ["立论深度", "逻辑论证", "论据质量", "反驳能力", "应变能力", "语言表达", "整体配合", "立场坚定性"]:
+        for dim in ["创新性评估", "方法论评估", "实验可靠性评估", "写作表达评估", "审稿全面性", "审稿深度", "审稿客观性", "立场坚定性"]:
             aff = score.get("affirmative_scores", {}).get(dim, "-")
             neg = score.get("negative_scores", {}).get(dim, "-")
             score_text += f"| {dim} | {aff} | {neg} |\n"
