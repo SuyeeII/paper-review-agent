@@ -153,8 +153,8 @@ def format_debate_result(state: DebateState) -> str:
     """
     lines = []
     lines.append("=" * 60)
-    lines.append(f"辩题：{state['topic']}")
-    lines.append(f"攻辩轮数：{state['max_rounds']}")
+    lines.append(f"决策问题：{state['topic']}")
+    lines.append(f"分析轮数：{state['max_rounds']}")
     lines.append(f"自我反思：{'启用' if state['reflection_enabled'] else '关闭'}")
     lines.append("=" * 60)
     lines.append("")
@@ -166,25 +166,25 @@ def format_debate_result(state: DebateState) -> str:
         lines.append("-" * 40)
         lines.append("")
 
-    # 评分结果
+    # 评估结果
     if state["judge_score"]:
         score = state["judge_score"]
         lines.append("=" * 60)
-        lines.append("📊 评委评分结果")
+        lines.append("📊 决策评估结果")
         lines.append("=" * 60)
-        lines.append(f"正方总分：{score.get('affirmative_total', 0)} / 80")
-        lines.append(f"反方总分：{score.get('negative_total', 0)} / 80")
-        winner = "正方" if score.get("winner") == "affirmative" else "反方"
-        lines.append(f"🏆 获胜方：{winner}")
+        lines.append(f"支持方总分：{score.get('affirmative_total', 0)} / 80")
+        lines.append(f"反对方总分：{score.get('negative_total', 0)} / 80")
+        winner = "支持方观点更有说服力" if score.get("winner") == "affirmative" else "反对方观点更有说服力"
+        lines.append(f"🏆 评估结果：{winner}")
         lines.append(f"分差：{score.get('margin', 0)}")
         lines.append("")
         lines.append("各维度得分：")
         for dim in ["立论深度", "逻辑论证", "论据质量", "反驳能力", "应变能力", "语言表达", "整体配合", "立场坚定性"]:
             aff = score.get("affirmative_scores", {}).get(dim, "-")
             neg = score.get("negative_scores", {}).get(dim, "-")
-            lines.append(f"  {dim}：正方 {aff} | 反方 {neg}")
+            lines.append(f"  {dim}：支持方 {aff} | 反对方 {neg}")
         lines.append("")
-        lines.append("评委点评：")
+        lines.append("综合点评：")
         lines.append(score.get("comment", ""))
 
     return "\n".join(lines)
