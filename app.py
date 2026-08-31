@@ -69,11 +69,11 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
     if not paper_content or not paper_content.strip():
-        yield "请先上传论文文件（PDF / TXT / MD）！", "", "", "", "", "", None, "❌ 未上传论文文件，请先上传"
+        yield "请先上传论文文件（PDF / TXT / MD）！", "", "", "", "", "", "", None, "❌ 未上传论文文件，请先上传"
         return
 
     # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）
-    yield "", "", "", "", "", "", None, "正在审稿，请稍候（预计 2-3 分钟，共 10 次 AI 调用）..."
+    yield "", "", "", "", "", "", "", None, "正在审稿，请稍候（预计 2-3 分钟，共 10 次 AI 调用）..."
 
     # 运行审稿（同步执行，因为LangGraph invoke是同步的）
     try:
@@ -83,7 +83,7 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
         )
     except Exception as e:
         error_msg = f"❌ 审稿运行出错：{str(e)}"
-        yield error_msg, "", "", "", "", "", None, ""
+        yield error_msg, "", "", "", "", "", "", None, ""
         return
 
     # 提取各部分内容
@@ -94,7 +94,7 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
     writing_text = final_state.get("writing_final") or final_state.get("writing_review") or "写作审稿失败"
     summary_text = final_state.get("editor_summary") or "主编汇总生成失败"
 
-    # 完整文本（仅用于导出文件，不在界面显示）
+    # 完整文本（用于导出文件和底部复制框）
     full_text = format_review_result(final_state)
 
     # 导出为markdown文件
@@ -109,7 +109,7 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
         print(f"[导出] 保存失败: {e}")
         export_path = None
 
-    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, export_path, "✅ 审稿完成！"
+    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, full_text, export_path, "✅ 审稿完成！"
 
 
 # ===== Gradio 界面 =====
@@ -167,7 +167,13 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
         with gr.Column(scale=2):
             summary_md = gr.Markdown("审稿结果会在审稿结束后展示...", label="📊 主编综合审稿报告")
 
-    # 下方：导出下载
+    # 下方：完整报告复制框 + 导出下载
+    full_text_box = gr.Textbox(
+        label="📋 完整审稿报告（可全选复制，或点击右上角复制按钮）",
+        lines=20,
+        interactive=False,
+        show_copy_button=True,
+    )
     with gr.Row():
         export_file = gr.File(label="📥 导出审稿报告（Markdown，审稿完成后可下载）", interactive=False)
 
@@ -176,7 +182,7 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
         fn=run_review_ui,
         inputs=[paper_content_state, reflection_checkbox],
         outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
-                 summary_md, export_file, status_text],
+                 summary_md, full_text_box, export_file, status_text],
     )
 
     # 页脚
