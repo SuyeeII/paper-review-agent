@@ -65,36 +65,18 @@ def on_paper_file_upload(file_obj, current_text: str) -> str:
     return parsed
 
 
-def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
+def run_review_ui(topic: str, reflection_enabled: bool):
     """
     Gradio 界面的审稿运行函数
     4个维度审稿人并行评审 → 自我反思修正 → 主编汇总
-    返回：论文结构解析、4个维度审稿意见、主编报告、完整记录、导出文件、状态
+    返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
     if not topic or not topic.strip():
-        yield "请输入论文内容，或上传论文文件！", "", "", "", "", "", "", None, ""
+        yield "请输入论文内容，或上传论文文件！", "", "", "", "", "", None, ""
         return
 
-    # 阶段进度映射
-    stages = [
-        (0.05, "解析论文结构中..."),
-        (0.15, "创新性审稿人评审中..."),
-        (0.3, "方法论审稿人评审中..."),
-        (0.45, "实验审稿人评审中..."),
-        (0.6, "写作审稿人评审中..."),
-    ]
-    if reflection_enabled:
-        stages.extend([
-            (0.7, "创新性审稿人自我反思修正中..."),
-            (0.75, "方法论审稿人自我反思修正中..."),
-            (0.8, "实验审稿人自我反思修正中..."),
-            (0.85, "写作审稿人自我反思修正中..."),
-        ])
-    stages.append((0.95, "主编汇总综合审稿报告中..."))
-
-    # 显示初始进度
-    for p, desc in stages:
-        progress(p, desc=desc)
+    # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）
+    yield "", "", "", "", "", "", None, "正在审稿，请稍候（预计 2-3 分钟，共 10 次 AI 调用）..."
 
     # 运行审稿（同步执行，因为LangGraph invoke是同步的）
     try:
@@ -104,7 +86,7 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
         )
     except Exception as e:
         error_msg = f"❌ 审稿运行出错：{str(e)}"
-        yield error_msg, "", "", "", "", "", "", None, ""
+        yield error_msg, "", "", "", "", "", None, ""
         return
 
     # 提取各部分内容
@@ -115,7 +97,7 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
     writing_text = final_state.get("writing_final") or final_state.get("writing_review") or "写作审稿失败"
     summary_text = final_state.get("editor_summary") or "主编汇总生成失败"
 
-    # 完整文本
+    # 完整文本（仅用于导出文件，不在界面显示）
     full_text = format_review_result(final_state)
 
     # 导出为markdown文件
@@ -130,8 +112,7 @@ def run_review_ui(topic: str, reflection_enabled: bool, progress=gr.Progress()):
         print(f"[导出] 保存失败: {e}")
         export_path = None
 
-    progress(1.0, desc="✅ 审稿完成！")
-    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, full_text, export_path, "✅ 审稿完成！"
+    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, export_path, "✅ 审稿完成！"
 
 
 # ===== Gradio 界面 =====
@@ -194,19 +175,16 @@ with gr.Blocks(title="论文多视角审稿助手", theme=gr.themes.Soft()) as d
         with gr.Column(scale=2):
             summary_md = gr.Markdown("审稿结果会在审稿结束后展示...", label="📊 主编综合审稿报告")
 
-    # 下方：完整记录 + 导出下载
+    # 下方：导出下载
     with gr.Row():
-        with gr.Column(scale=3):
-            full_text_box = gr.Textbox(label="完整审稿记录（可全选复制）", lines=6, interactive=False)
-        with gr.Column(scale=1):
-            export_file = gr.File(label="📥 导出审稿报告（Markdown）", interactive=False)
+        export_file = gr.File(label="📥 导出审稿报告（Markdown，审稿完成后可下载）", interactive=False)
 
     # 事件绑定
     run_button.click(
         fn=run_review_ui,
         inputs=[topic_input, reflection_checkbox],
         outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
-                 summary_md, full_text_box, export_file, status_text],
+                 summary_md, export_file, status_text],
     )
 
     # 页脚
