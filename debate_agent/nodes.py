@@ -436,15 +436,16 @@ def _fix_editor_defects_format(summary: str) -> str:
     items = re.split(r'(?=\d+\.\s)', defects_content.strip())
     items = [item.strip() for item in items if item.strip()]
 
+    original_count = len(items)
     modified = False
 
     # 限制最多6条，超过的话只保留前6条（最严重的）
     if len(items) > 6:
         items = items[:6]
         modified = True
-        print(f"[后处理] 主编主要缺陷数量修正：原来有{len(items)}条，截断为6条")
+        print(f"[后处理] 主编主要缺陷数量修正：原来有{original_count}条，截断为6条")
 
-    # 重新编号
+    # 重新编号（总是执行，因为LLM生成的编号可能有重复或不连续）
     renumbered_items = []
     for i, item in enumerate(items, 1):
         item = re.sub(r'^\d+\.\s', f'{i}. ', item)
@@ -455,14 +456,15 @@ def _fix_editor_defects_format(summary: str) -> str:
     # 去掉加粗格式：把**...**替换成...
     new_defects_content = re.sub(r'\*\*(.+?)\*\*', r'\1', new_defects_content)
 
-    if new_defects_content == defects_content and not modified:
-        return summary  # 没有修改，不需要更新
+    # 只要内容有变化（重新编号、截断、去加粗），就更新
+    if new_defects_content == defects_content:
+        return summary  # 内容完全一样，不需要修改
 
     new_summary = summary[:match.start()] + prefix + new_defects_content + suffix + summary[match.end():]
     if modified:
-        print("[后处理] 主编主要缺陷格式修正：去掉了加粗，保持格式统一，限制最多6条")
+        print("[后处理] 主编主要缺陷格式修正：重新编号+去掉加粗+限制最多6条")
     else:
-        print("[后处理] 主编主要缺陷格式修正：去掉了加粗，保持格式统一")
+        print("[后处理] 主编主要缺陷格式修正：重新编号+去掉加粗")
     return new_summary
 
 
