@@ -62,10 +62,10 @@ def on_paper_file_upload(file_obj) -> str:
     return parsed if parsed else ""
 
 
-def run_review_ui(paper_content: str, reflection_enabled: bool):
+def run_review_ui(paper_content: str):
     """
     Gradio 界面的审稿运行函数
-    4个维度审稿人并行评审 → 自我反思修正 → 主编汇总
+    4个维度审稿人并行评审 → 主编汇总
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
     if not paper_content or not paper_content.strip():
@@ -79,7 +79,6 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
     try:
         final_state = run_review(
             topic=paper_content.strip(),
-            reflection_enabled=reflection_enabled,
         )
     except Exception as e:
         error_msg = f"❌ 审稿运行出错：{str(e)}"
@@ -88,10 +87,10 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
 
     # 提取各部分内容
     structure_text = final_state.get("paper_structure") or "论文结构解析失败"
-    innovation_text = final_state.get("innovation_final") or final_state.get("innovation_review") or "创新性审稿失败"
-    methodology_text = final_state.get("methodology_final") or final_state.get("methodology_review") or "方法论审稿失败"
-    experiment_text = final_state.get("experiment_final") or final_state.get("experiment_review") or "实验审稿失败"
-    writing_text = final_state.get("writing_final") or final_state.get("writing_review") or "写作审稿失败"
+    innovation_text = final_state.get("innovation_review") or "创新性审稿失败"
+    methodology_text = final_state.get("methodology_review") or "方法论审稿失败"
+    experiment_text = final_state.get("experiment_review") or "论证与证据审稿失败"
+    writing_text = final_state.get("writing_review") or "写作审稿失败"
     summary_text = final_state.get("editor_summary") or "主编汇总生成失败"
 
     # 完整文本（用于导出文件和底部复制框）
@@ -118,9 +117,9 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
     gr.Markdown("""
     # 📝 论文多视角审稿助手
 
-    基于 LangGraph 的多智能体论文审稿系统，4个维度审稿人（创新性/方法论/实验/写作）并行评审，自我反思修正后由主编汇总，输出结构化综合审稿报告。
+    基于 LangGraph 的多智能体论文审稿系统，4个维度审稿人（创新性/方法论/论证与证据/写作表达）并行评审，由主编汇总，输出结构化综合审稿报告。
 
-    **审稿维度**：创新性 · 方法论 · 实验可靠性 · 写作表达
+    **审稿维度**：创新性 · 方法论 · 论证与证据 · 写作表达
 
     > 💡 请上传完整论文 PDF（或 TXT/MD），系统会自动解析全文进行审稿。
     """)
@@ -138,12 +137,6 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
         outputs=[paper_content_state],
     )
 
-    with gr.Row():
-        reflection_checkbox = gr.Checkbox(
-            value=True,
-            label="自我反思修正（推荐）",
-        )
-
     # 开始审稿按钮占满整行，状态显示在按钮下方
     run_button = gr.Button("🚀 开始审稿", variant="primary", size="lg")
     status_text = gr.Textbox(label="状态", value="等待开始...", interactive=False, lines=1)
@@ -159,8 +152,8 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
                     innovation_md = gr.Markdown("审稿开始后这里会展示创新性审稿意见...")
                 with gr.Tab("🔧 方法论"):
                     methodology_md = gr.Markdown("审稿开始后这里会展示方法论审稿意见...")
-                with gr.Tab("🧪 实验可靠性"):
-                    experiment_md = gr.Markdown("审稿开始后这里会展示实验审稿意见...")
+                with gr.Tab("⚖️ 论证与证据"):
+                    experiment_md = gr.Markdown("审稿开始后这里会展示论证与证据审稿意见...")
                 with gr.Tab("✍️ 写作表达"):
                     writing_md = gr.Markdown("审稿开始后这里会展示写作审稿意见...")
         # 右侧：主编综合报告
@@ -179,7 +172,7 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
     # 事件绑定
     run_button.click(
         fn=run_review_ui,
-        inputs=[paper_content_state, reflection_checkbox],
+        inputs=[paper_content_state],
         outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
                  summary_md, full_text_box, export_file, status_text],
     )

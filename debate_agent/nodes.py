@@ -145,7 +145,7 @@ def _filter_deduction_note(content: str, keywords: list, dimension: str) -> str:
         generic_notes = {
             "innovation": "扣分主要因为创新性描述不够具体、相关工作对比不足、技术贡献有限。",
             "methodology": "扣分主要因为理论推导不够严谨、方法假设不够清晰、技术路线描述不够明确。",
-            "experiment": "扣分主要因为实验设计不够充分、结果可靠性有待提升、可靠性细节不够完善。",
+            "experiment": "扣分主要因为论证不够充分、证据可靠性有待提升、结论支撑不够完善。",
             "writing": "扣分主要因为语言表达不够准确、结构不够清晰、文字表达不够简洁。",
         }
         return generic_notes.get(dimension, content)
@@ -275,18 +275,18 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
 
 
 def node_experiment_review(state: ReviewState) -> ReviewState:
-    """实验审稿人"""
+    """论证与证据审稿人"""
     llm = get_llm()
     prompt = get_experiment_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，擅长评估实验设计的科学性和结果的可靠性。")
+    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文论证与证据审稿人，擅长评估论证是否充分、证据是否可靠、结论是否有充分支撑（适用于所有学科，包括理工科的实验数据、文科的案例分析、理论研究的逻辑推导等）。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "experiment")
-    print("[审稿] 实验审稿完成")
+    print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
         "full_transcript": [{
             "reviewer": "experiment",
-            "role": "实验审稿人（初审）",
+            "role": "论证与证据审稿人（初审）",
             "content": review,
         }],
     }
@@ -351,7 +351,7 @@ def node_methodology_reflection(state: ReviewState) -> ReviewState:
 def node_experiment_reflection(state: ReviewState) -> ReviewState:
     """实验审稿人自我反思修正"""
     llm = get_llm()
-    prompt = get_reflection_prompt("实验可靠性", state["topic"], state["experiment_review"])
+    prompt = get_reflection_prompt("论证与证据", state["topic"], state["experiment_review"])
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，正在对自己的初审意见进行自我反思和修正。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     final = filter_cross_dimension_issues(final, "experiment")
@@ -394,11 +394,11 @@ def _fix_editor_total_score(summary: str) -> str:
     # 匹配各维度评分表格里的分数
     # 格式：| 创新性 | X | ... |
     # 格式：| 方法论 | X | ... |
-    # 格式：| 实验可靠性 | X | ... |
+    # 格式：| 论证与证据 | X | ... |
     # 格式：| 写作表达 | X | ... |
     pattern_innovation = r'\|\s*创新性\s*\|\s*(\d+)\s*\|'
     pattern_methodology = r'\|\s*方法论\s*\|\s*(\d+)\s*\|'
-    pattern_experiment = r'\|\s*实验可靠性\s*\|\s*(\d+)\s*\|'
+    pattern_experiment = r'\|\s*论证与证据\s*\|\s*(\d+)\s*\|'
     pattern_writing = r'\|\s*写作表达\s*\|\s*(\d+)\s*\|'
 
     match_innovation = re.search(pattern_innovation, summary)
@@ -552,11 +552,11 @@ def _fix_editor_remove_conflict_section(summary: str) -> str:
 
 def node_editor_summary(state: ReviewState) -> ReviewState:
     """主编汇总：汇总4份审稿意见，给出综合审稿报告"""
-    # 如果启用了反思，用修正后的意见；否则用初审意见
-    innovation = state.get("innovation_final") or state.get("innovation_review") or ""
-    methodology = state.get("methodology_final") or state.get("methodology_review") or ""
-    experiment = state.get("experiment_final") or state.get("experiment_review") or ""
-    writing = state.get("writing_final") or state.get("writing_review") or ""
+    # 直接用4个维度的初审意见
+    innovation = state.get("innovation_review") or ""
+    methodology = state.get("methodology_review") or ""
+    experiment = state.get("experiment_review") or ""
+    writing = state.get("writing_review") or ""
 
     llm = get_llm()
     prompt = get_editor_summary_prompt(state["topic"], innovation, methodology, experiment, writing)
@@ -579,17 +579,3 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
             "content": summary,
         }],
     }
-
-
-# ===== 路由函数 =====
-
-def route_after_review(state: ReviewState) -> str:
-    """
-    4个审稿人完成后，决定下一步：
-    - 如果启用了自我反思，进入反思修正阶段
-    - 否则直接进入主编汇总
-    """
-    if state.get("reflection_enabled", True):
-        return "reflection"
-    else:
-        return "summary"
