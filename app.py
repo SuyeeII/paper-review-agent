@@ -73,7 +73,7 @@ def run_review_ui(paper_content: str, reflection_enabled: bool):
         return
 
     # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）
-    yield "", "", "", "", "", "", "", None, "正在审稿，请稍候，需要稍等几分钟..."
+    yield "", "", "", "", "", "", "", None, "正在审稿，请稍等几分钟..."
 
     # 运行审稿（同步执行，因为LangGraph invoke是同步的）
     try:
