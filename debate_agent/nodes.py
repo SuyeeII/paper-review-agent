@@ -2,6 +2,7 @@
 4个维度审稿人并行评审 → 自我反思修正 → 主编汇总
 """
 from typing import Optional
+import re
 from debate_agent.state import ReviewState, ReviewPhase
 from debate_agent.llm import get_llm
 from debate_agent.prompts import (
@@ -13,6 +14,93 @@ from debate_agent.prompts import (
     get_reflection_prompt,
     get_editor_summary_prompt,
 )
+
+
+# ===== 后处理：过滤越界的主要缺陷（第二层防护，不依赖LLM，100%可靠）=====
+
+# 每个维度的越界关键词：如果某条主要缺陷包含这些关键词，就删掉
+CROSS_DIMENSION_KEYWORDS = {
+    "innovation": [  # 创新性审稿人不能评价的内容
+        "代码", "可复现", "复现", "对比实验", "消融实验", "消融",
+        "收敛性证明", "理论推导", "数学推导", "基线方法", "基线",
+        "数据集", "评价指标", "统计显著性", "标准差", "方差",
+        "语言", "语法", "拼写", "图表规范", "参考文献格式",
+    ],
+    "methodology": [  # 方法论审稿人不能评价的内容
+        "代码", "可复现", "复现", "对比实验", "消融实验", "消融",
+        "数据集", "评价指标", "统计显著性", "标准差", "方差",
+        "基线方法", "基线", "语言", "语法", "拼写",
+    ],
+    "experiment": [  # 实验审稿人不能评价的内容
+        "创新点", "创新性", "相关工作对比", "技术贡献", "贡献大小",
+        "语言", "语法", "拼写", "图表规范", "参考文献格式",
+        "理论推导", "数学推导", "收敛性证明",
+    ],
+    "writing": [  # 写作审稿人不能评价的内容
+        "对比实验", "消融实验", "消融", "基线方法", "基线",
+        "代码公开", "未公开代码", "代码", "可复现", "复现",
+        "数据集", "评价指标", "统计显著性", "标准差", "方差",
+        "创新点", "创新性", "理论推导", "数学推导", "收敛性证明",
+        "方法假设", "技术路线",
+    ],
+}
+
+
+def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
+    """
+    后处理过滤：删掉审稿人输出中越界的主要缺陷条目
+    这是第二层防护，不依赖LLM遵守prompt，100%可靠
+    """
+    if dimension not in CROSS_DIMENSION_KEYWORDS:
+        return review_text
+
+    keywords = CROSS_DIMENSION_KEYWORDS[dimension]
+
+    # 匹配"**主要缺陷**："到下一个"**"开头的部分之间的内容
+    pattern = r'(\*\*主要缺陷\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
+    match = re.search(pattern, review_text, re.DOTALL)
+    if not match:
+        return review_text
+
+    prefix = match.group(1)
+    defects_content = match.group(2)
+    suffix = match.group(3)
+
+    # 按编号拆分成条目（匹配 "1. " "2. " 等）
+    items = re.split(r'(?=\d+\.\s)', defects_content.strip())
+    items = [item.strip() for item in items if item.strip()]
+
+    # 过滤掉包含越界关键词的条目
+    filtered_items = []
+    removed_count = 0
+    for item in items:
+        if any(kw in item for kw in keywords):
+            removed_count += 1
+            continue
+        filtered_items.append(item)
+
+    if removed_count == 0:
+        return review_text
+
+    # 重新编号
+    renumbered_items = []
+    for i, item in enumerate(filtered_items, 1):
+        # 把原来的编号替换成新编号
+        item = re.sub(r'^\d+\.\s', f'{i}. ', item)
+        renumbered_items.append(item)
+
+    new_defects_content = '\n'.join(renumbered_items)
+    if not new_defects_content:
+        new_defects_content = "（本维度未发现明显缺陷）"
+
+    new_review_text = (
+        review_text[:match.start()]
+        + prefix + new_defects_content + suffix
+        + review_text[match.end():]
+    )
+
+    print(f"[后处理过滤] {dimension}审稿人：删除了{removed_count}条越界的主要缺陷")
+    return new_review_text
 
 
 # ===== 论文结构解析节点 =====
@@ -39,6 +127,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_innovation_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    review = filter_cross_dimension_issues(review, "innovation")
     state["innovation_review"] = review
     state["full_transcript"].append({
         "reviewer": "innovation",
@@ -54,6 +144,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_methodology_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    review = filter_cross_dimension_issues(review, "methodology")
     state["methodology_review"] = review
     state["full_transcript"].append({
         "reviewer": "methodology",
@@ -69,6 +161,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_experiment_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，擅长评估实验设计的科学性、结果的可靠性，以及实验的可复现性。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    review = filter_cross_dimension_issues(review, "experiment")
     state["experiment_review"] = review
     state["full_transcript"].append({
         "reviewer": "experiment",
@@ -84,6 +178,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_writing_review_prompt(state["topic"], state.get("paper_structure"))
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    review = filter_cross_dimension_issues(review, "writing")
     state["writing_review"] = review
     state["full_transcript"].append({
         "reviewer": "writing",
@@ -101,6 +197,8 @@ def node_innovation_reflection(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_reflection_prompt("创新性", state["topic"], state["innovation_review"])
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，正在对自己的初审意见进行自我反思和修正。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    final = filter_cross_dimension_issues(final, "innovation")
     state["innovation_final"] = final
     state["full_transcript"].append({
         "reviewer": "innovation",
@@ -116,6 +214,8 @@ def node_methodology_reflection(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_reflection_prompt("方法论", state["topic"], state["methodology_review"])
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，正在对自己的初审意见进行自我反思和修正。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    final = filter_cross_dimension_issues(final, "methodology")
     state["methodology_final"] = final
     state["full_transcript"].append({
         "reviewer": "methodology",
@@ -131,6 +231,8 @@ def node_experiment_reflection(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_reflection_prompt("实验可靠性与可复现性", state["topic"], state["experiment_review"])
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，正在对自己的初审意见进行自我反思和修正。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    final = filter_cross_dimension_issues(final, "experiment")
     state["experiment_final"] = final
     state["full_transcript"].append({
         "reviewer": "experiment",
@@ -146,6 +248,8 @@ def node_writing_reflection(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_reflection_prompt("写作表达", state["topic"], state["writing_review"])
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，正在对自己的初审意见进行自我反思和修正。")
+    # 后处理过滤：删掉越界的主要缺陷（第二层防护）
+    final = filter_cross_dimension_issues(final, "writing")
     state["writing_final"] = final
     state["full_transcript"].append({
         "reviewer": "writing",
