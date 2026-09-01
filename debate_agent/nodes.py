@@ -164,12 +164,10 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
     total_removed = 0
 
     # ===== 1. 过滤所有"主要缺陷"部分 =====
+    # 先收集所有匹配，再倒序处理，避免while循环无限循环（如果过滤后内容没变，会一直匹配同一个）
     pattern_defects = r'(\*\*主要缺陷\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
-    # 循环处理所有匹配（因为反思修正后的输出可能有多个"主要缺陷"部分）
-    while True:
-        match = re.search(pattern_defects, review_text, re.DOTALL)
-        if not match:
-            break
+    matches_defects = list(re.finditer(pattern_defects, review_text, re.DOTALL))
+    for match in reversed(matches_defects):
         prefix = match.group(1)
         defects_content = match.group(2)
         suffix = match.group(3)
@@ -183,10 +181,8 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
 
     # ===== 2. 过滤所有"具体修改建议"部分 =====
     pattern_suggestions = r'(\*\*具体修改建议\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
-    while True:
-        match = re.search(pattern_suggestions, review_text, re.DOTALL)
-        if not match:
-            break
+    matches_suggestions = list(re.finditer(pattern_suggestions, review_text, re.DOTALL))
+    for match in reversed(matches_suggestions):
         prefix = match.group(1)
         suggestions_content = match.group(2)
         suffix = match.group(3)
@@ -200,10 +196,8 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
 
     # ===== 3. 修正所有"扣分说明"部分 =====
     pattern_deduction = r'(\*\*扣分说明\*\*[：:]\s*)(.*?)(\n|$)'
-    while True:
-        match = re.search(pattern_deduction, review_text, re.DOTALL)
-        if not match:
-            break
+    matches_deduction = list(re.finditer(pattern_deduction, review_text, re.DOTALL))
+    for match in reversed(matches_deduction):
         prefix = match.group(1)
         deduction_content = match.group(2)
         suffix = match.group(3)
@@ -215,9 +209,6 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
                 + prefix + new_deduction + suffix
                 + review_text[match.end():]
             )
-        else:
-            # 如果没有修改，跳出循环，避免无限循环
-            break
 
     if total_removed > 0:
         print(f"[后处理过滤] {dimension}审稿人：删除/修正了{total_removed}处越界内容（主要缺陷+修改建议+扣分说明，包含所有出现的部分）")
