@@ -704,6 +704,22 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = _fix_editor_remove_conflict_section(summary)
     # 后处理：把旧的维度名称"实验审稿人"替换成新的"论证与证据审稿人"（LLM可能用旧名称）
     summary = summary.replace("实验审稿人", "论证与证据审稿人")
+    # 后处理：替换掉LLM可能直接保留的占位符（防止prompt示例里的占位符被当成内容）
+    placeholder_patterns = [
+        ("[论文中实际存在的方法/研究对象]", "现有相关方法"),
+        ("[论文中实际存在的方法名称]", "本文提出的方法"),
+        ("[论文中实际存在的方法]", "本文提出的方法"),
+        ("[论文中实际存在的研究对象]", "本文研究对象"),
+        ("[论文中实际存在的模块名称]", "本文提出的模块"),
+        ("[论文中实际存在的实验名称]", "本文的实验"),
+    ]
+    placeholder_replaced = False
+    for old, new in placeholder_patterns:
+        if old in summary:
+            summary = summary.replace(old, new)
+            placeholder_replaced = True
+    if placeholder_replaced:
+        print("[后处理] 主编报告：替换了LLM未替换的占位符")
     print("[汇总] 主编综合审稿报告完成")
     return {
         "editor_summary": summary,
