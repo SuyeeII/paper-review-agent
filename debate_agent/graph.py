@@ -150,7 +150,7 @@ def format_review_result(state: ReviewState) -> str:
     dimensions = [
         ("创新性", state.get("innovation_final") or state.get("innovation_review")),
         ("方法论", state.get("methodology_final") or state.get("methodology_review")),
-        ("实验可靠性与可复现性", state.get("experiment_final") or state.get("experiment_review")),
+        ("实验可靠性", state.get("experiment_final") or state.get("experiment_review")),
         ("写作表达", state.get("writing_final") or state.get("writing_review")),
     ]
 

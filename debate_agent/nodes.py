@@ -343,7 +343,7 @@ def node_methodology_reflection(state: ReviewState) -> ReviewState:
 def node_experiment_reflection(state: ReviewState) -> ReviewState:
     """实验审稿人自我反思修正"""
     llm = get_llm()
-    prompt = get_reflection_prompt("实验可靠性与可复现性", state["topic"], state["experiment_review"])
+    prompt = get_reflection_prompt("实验可靠性", state["topic"], state["experiment_review"])
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，正在对自己的初审意见进行自我反思和修正。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     final = filter_cross_dimension_issues(final, "experiment")
@@ -384,11 +384,11 @@ def _fix_editor_total_score(summary: str) -> str:
     # 匹配各维度评分表格里的分数
     # 格式：| 创新性 | X | ... |
     # 格式：| 方法论 | X | ... |
-    # 格式：| 实验可靠性与可复现性 | X | ... |
+    # 格式：| 实验可靠性 | X | ... |
     # 格式：| 写作表达 | X | ... |
     pattern_innovation = r'\|\s*创新性\s*\|\s*(\d+)\s*\|'
     pattern_methodology = r'\|\s*方法论\s*\|\s*(\d+)\s*\|'
-    pattern_experiment = r'\|\s*实验可靠性与可复现性\s*\|\s*(\d+)\s*\|'
+    pattern_experiment = r'\|\s*实验可靠性\s*\|\s*(\d+)\s*\|'
     pattern_writing = r'\|\s*写作表达\s*\|\s*(\d+)\s*\|'
 
     match_innovation = re.search(pattern_innovation, summary)
