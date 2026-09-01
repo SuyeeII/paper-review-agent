@@ -423,7 +423,8 @@ def _fix_editor_defects_format(summary: str) -> str:
     同时主编经常列出超过6条主要缺陷，需要截断只保留前6条（最严重的）。
     """
     # 匹配"## 四、主要缺陷"到"## 五、"之间的内容
-    pattern = r'(## 四、主要缺陷\n.*?\n)(.*?)(\n## 五、)'
+    # 注意：第一个分组只匹配"## 四、主要缺陷\n"，不要把第一条主要缺陷也分到prefix里，否则重新编号时第一条会被漏掉
+    pattern = r'(## 四、主要缺陷\n)(.*?)(\n## 五、)'
     match = re.search(pattern, summary, re.DOTALL)
     if not match:
         return summary
