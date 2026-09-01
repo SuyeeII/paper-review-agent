@@ -146,7 +146,7 @@ def _filter_deduction_note(content: str, keywords: list, dimension: str) -> str:
             "innovation": "扣分主要因为创新性描述不够具体、相关工作对比不足、技术贡献有限。",
             "methodology": "扣分主要因为理论推导不够严谨、方法假设不够清晰、技术路线描述不够明确。",
             "experiment": "扣分主要因为实验设计不够充分、结果可靠性有待提升、可复现性细节不够完善。",
-            "writing": "扣分主要因为语言表达不够准确、结构不够清晰、参考文献不够规范。",
+            "writing": "扣分主要因为语言表达不够准确、结构不够清晰、文字表达不够简洁。",
         }
         return generic_notes.get(dimension, content)
     return content
