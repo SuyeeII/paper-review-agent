@@ -104,6 +104,94 @@ CROSS_DIMENSION_KEYWORDS = {
 }
 
 
+# ===== 后处理：检测并过滤幻觉的方法名称（防止LLM把示例里的方法套用到当前论文）=====
+
+# 常见的、容易被LLM幻觉的方法/算法/模块名称列表
+# 如果论文内容里没有这些名称，但审稿意见里出现了，就认为是幻觉，过滤掉包含这些名称的句子
+HALLUCINATION_METHOD_KEYWORDS = [
+    # 聚类/时序预测类（空调节能论文里的，容易被幻觉到其他论文）
+    "K-means", "k-means", "K均值", "k均值", "LSTM", "lstm", "长短期记忆",
+    # 优化算法类（PSO论文里的，容易被幻觉到其他论文）
+    "IDPSO", "idpso", "PSO", "pso", "粒子群", "遗传算法", "GA", "模拟退火",
+    # 目标检测类（YOLO论文里的，容易被幻觉到其他论文）
+    "YOLO", "yolo", "C2f", "c2f", "C2f_CFE", "DLSCD", "MSDA", "CCFM",
+    "Faster R-CNN", "Mask R-CNN", "DETR", "Swin Transformer",
+    # 其他常见算法
+    "CNN", "RNN", "Transformer", "BERT", "GPT", "SVM", "随机森林", "决策树",
+    "贝叶斯", "马尔可夫", "蒙特卡洛", "强化学习", "深度学习", "机器学习",
+]
+
+
+def _filter_hallucinated_methods(review_content: str, paper_content: str, dimension: str) -> str:
+    """
+    检测并过滤审稿意见里幻觉的方法名称
+    如果论文内容里没有某个方法名称，但审稿意见里出现了，就认为是幻觉
+    过滤掉主要缺陷和修改建议里包含这些幻觉方法名称的条目
+    """
+    if not paper_content or not review_content:
+        return review_content
+
+    # 找出论文内容里实际存在的方法名称
+    paper_methods = set()
+    for method in HALLUCINATION_METHOD_KEYWORDS:
+        if method in paper_content:
+            paper_methods.add(method.lower())
+
+    # 找出审稿意见里出现但论文里没有的方法名称（幻觉）
+    hallucinated_methods = []
+    for method in HALLUCINATION_METHOD_KEYWORDS:
+        if method in review_content and method.lower() not in paper_methods:
+            hallucinated_methods.append(method)
+
+    if not hallucinated_methods:
+        return review_content
+
+    print(f"[幻觉检测] {dimension}审稿人：发现论文中不存在的方法名称 {hallucinated_methods}，正在过滤...")
+
+    # 过滤主要缺陷和修改建议里包含幻觉方法名称的条目
+    def _filter_section(section_text: str) -> tuple:
+        items = re.split(r'(?=\d+\.\s)', section_text.strip())
+        items = [item.strip() for item in items if item.strip()]
+        filtered_items = []
+        removed_count = 0
+        for item in items:
+            if any(method in item for method in hallucinated_methods):
+                removed_count += 1
+                continue
+            filtered_items.append(item)
+        # 重新编号
+        renumbered = []
+        for i, item in enumerate(filtered_items, 1):
+            item = re.sub(r'^\d+\.\s', f'{i}. ', item)
+            renumbered.append(item)
+        return '\n'.join(renumbered), removed_count
+
+    total_removed = 0
+
+    # 过滤主要缺陷
+    defect_match = re.search(r'(\*\*主要缺陷\*\*：?\n)(.*?)(?=\n\*\*具体修改建议\*\*|\n\*\*扣分说明\*\*|$)', review_content, re.DOTALL)
+    if defect_match:
+        prefix = defect_match.group(1)
+        defect_text = defect_match.group(2)
+        filtered_defects, removed = _filter_section(defect_text)
+        total_removed += removed
+        review_content = review_content[:defect_match.start(2)] + filtered_defects + review_content[defect_match.end(2):]
+
+    # 过滤修改建议
+    suggestion_match = re.search(r'(\*\*具体修改建议\*\*：?\n)(.*?)(?=\n\*\*扣分说明\*\*|$)', review_content, re.DOTALL)
+    if suggestion_match:
+        prefix = suggestion_match.group(1)
+        suggestion_text = suggestion_match.group(2)
+        filtered_suggestions, removed = _filter_section(suggestion_text)
+        total_removed += removed
+        review_content = review_content[:suggestion_match.start(2)] + filtered_suggestions + review_content[suggestion_match.end(2):]
+
+    if total_removed > 0:
+        print(f"[幻觉检测] {dimension}审稿人：过滤了 {total_removed} 条包含幻觉方法名称的内容")
+
+    return review_content
+
+
 def _filter_section_items(content: str, keywords: list) -> tuple:
     """
     过滤一个section（主要缺陷/具体修改建议）里的条目
@@ -245,6 +333,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "innovation")
+    # 后处理过滤：检测并过滤幻觉的方法名称
+    review = _filter_hallucinated_methods(review, state["topic"], "创新性")
     print("[审稿] 创新性审稿完成")
     return {
         "innovation_review": review,
@@ -263,6 +353,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "methodology")
+    # 后处理过滤：检测并过滤幻觉的方法名称
+    review = _filter_hallucinated_methods(review, state["topic"], "方法论")
     print("[审稿] 方法论审稿完成")
     return {
         "methodology_review": review,
@@ -281,6 +373,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文论证与证据审稿人，擅长评估论证是否充分、证据是否可靠、结论是否有充分支撑（适用于所有学科，包括理工科的实验数据、文科的案例分析、理论研究的逻辑推导等）。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "experiment")
+    # 后处理过滤：检测并过滤幻觉的方法名称
+    review = _filter_hallucinated_methods(review, state["topic"], "论证与证据")
     print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
@@ -299,6 +393,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "writing")
+    # 后处理过滤：检测并过滤幻觉的方法名称
+    review = _filter_hallucinated_methods(review, state["topic"], "写作表达")
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,
