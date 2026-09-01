@@ -487,8 +487,8 @@ def _fix_editor_suggestions(summary: str) -> str:
     后处理：过滤主编修改建议里的"代码"相关条目，并重新编号
     论文里看不到代码相关情况，不管什么代码都不该评价
     """
-    # 匹配"## 六、修改建议清单"到"## 七、"之间的内容
-    pattern = r'(## 六、修改建议清单.*?\n)(.*?)(\n## 七、)'
+    # 匹配"## 五、修改建议清单"到"## 六、"之间的内容（去掉冲突说明后，修改建议是第五节）
+    pattern = r'(## 五、修改建议清单.*?\n)(.*?)(\n## 六、)'
     match = re.search(pattern, summary, re.DOTALL)
     if not match:
         return summary
