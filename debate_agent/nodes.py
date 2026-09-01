@@ -569,6 +569,8 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = _fix_editor_suggestions(summary)
     # 后处理：去掉"审稿意见冲突说明"部分，并调整后面的编号
     summary = _fix_editor_remove_conflict_section(summary)
+    # 后处理：把旧的维度名称"实验审稿人"替换成新的"论证与证据审稿人"（LLM可能用旧名称）
+    summary = summary.replace("实验审稿人", "论证与证据审稿人")
     print("[汇总] 主编综合审稿报告完成")
     return {
         "editor_summary": summary,
