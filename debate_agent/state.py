@@ -23,7 +23,7 @@ class ReviewState(TypedDict):
     # ===== 4个维度审稿意见（初审）=====
     innovation_review: Optional[str]    # 创新性审稿意见
     methodology_review: Optional[str]   # 方法论审稿意见
-    experiment_review: Optional[str]    # 实验审稿意见（含可复现性）
+    experiment_review: Optional[str]    # 实验审稿意见
     writing_review: Optional[str]       # 写作审稿意见
 
     # ===== 4个维度审稿意见（反思修正后，最终版）=====

@@ -159,7 +159,7 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
                     innovation_md = gr.Markdown("审稿开始后这里会展示创新性审稿意见...")
                 with gr.Tab("🔧 方法论"):
                     methodology_md = gr.Markdown("审稿开始后这里会展示方法论审稿意见...")
-                with gr.Tab("🧪 实验与可复现性"):
+                with gr.Tab("🧪 实验可靠性"):
                     experiment_md = gr.Markdown("审稿开始后这里会展示实验审稿意见...")
                 with gr.Tab("✍️ 写作表达"):
                     writing_md = gr.Markdown("审稿开始后这里会展示写作审稿意见...")

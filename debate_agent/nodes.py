@@ -145,7 +145,7 @@ def _filter_deduction_note(content: str, keywords: list, dimension: str) -> str:
         generic_notes = {
             "innovation": "扣分主要因为创新性描述不够具体、相关工作对比不足、技术贡献有限。",
             "methodology": "扣分主要因为理论推导不够严谨、方法假设不够清晰、技术路线描述不够明确。",
-            "experiment": "扣分主要因为实验设计不够充分、结果可靠性有待提升、可复现性细节不够完善。",
+            "experiment": "扣分主要因为实验设计不够充分、结果可靠性有待提升、可靠性细节不够完善。",
             "writing": "扣分主要因为语言表达不够准确、结构不够清晰、文字表达不够简洁。",
         }
         return generic_notes.get(dimension, content)
@@ -271,16 +271,16 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
 
 
 def node_experiment_review(state: ReviewState) -> ReviewState:
-    """实验审稿人（含可复现性评估）"""
+    """实验审稿人"""
     llm = get_llm()
     prompt = get_experiment_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，擅长评估实验设计的科学性、结果的可靠性，以及实验的可复现性。")
+    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，擅长评估实验设计的科学性和结果的可靠性。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "experiment")
     state["experiment_review"] = review
     state["full_transcript"].append({
         "reviewer": "experiment",
-        "role": "实验审稿人（初审，含可复现性评估）",
+        "role": "实验审稿人（初审）",
         "content": review,
     })
     print("[审稿] 实验审稿完成")
