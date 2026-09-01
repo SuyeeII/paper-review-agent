@@ -155,6 +155,7 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
     """
     后处理过滤：删掉审稿人输出中越界的主要缺陷、具体修改建议，修正扣分说明
     这是第二层防护，不依赖LLM遵守prompt，100%可靠
+    注意：会处理所有出现的"主要缺陷""具体修改建议""扣分说明"部分（包括初审和反思修正后的部分）
     """
     if dimension not in CROSS_DIMENSION_KEYWORDS:
         return review_text
@@ -162,10 +163,13 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
     keywords = CROSS_DIMENSION_KEYWORDS[dimension]
     total_removed = 0
 
-    # ===== 1. 过滤"主要缺陷"部分 =====
+    # ===== 1. 过滤所有"主要缺陷"部分 =====
     pattern_defects = r'(\*\*主要缺陷\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
-    match = re.search(pattern_defects, review_text, re.DOTALL)
-    if match:
+    # 循环处理所有匹配（因为反思修正后的输出可能有多个"主要缺陷"部分）
+    while True:
+        match = re.search(pattern_defects, review_text, re.DOTALL)
+        if not match:
+            break
         prefix = match.group(1)
         defects_content = match.group(2)
         suffix = match.group(3)
@@ -177,10 +181,12 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
             + review_text[match.end():]
         )
 
-    # ===== 2. 过滤"具体修改建议"部分 =====
+    # ===== 2. 过滤所有"具体修改建议"部分 =====
     pattern_suggestions = r'(\*\*具体修改建议\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
-    match = re.search(pattern_suggestions, review_text, re.DOTALL)
-    if match:
+    while True:
+        match = re.search(pattern_suggestions, review_text, re.DOTALL)
+        if not match:
+            break
         prefix = match.group(1)
         suggestions_content = match.group(2)
         suffix = match.group(3)
@@ -192,10 +198,12 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
             + review_text[match.end():]
         )
 
-    # ===== 3. 修正"扣分说明"部分 =====
+    # ===== 3. 修正所有"扣分说明"部分 =====
     pattern_deduction = r'(\*\*扣分说明\*\*[：:]\s*)(.*?)(\n|$)'
-    match = re.search(pattern_deduction, review_text, re.DOTALL)
-    if match:
+    while True:
+        match = re.search(pattern_deduction, review_text, re.DOTALL)
+        if not match:
+            break
         prefix = match.group(1)
         deduction_content = match.group(2)
         suffix = match.group(3)
@@ -207,9 +215,12 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
                 + prefix + new_deduction + suffix
                 + review_text[match.end():]
             )
+        else:
+            # 如果没有修改，跳出循环，避免无限循环
+            break
 
     if total_removed > 0:
-        print(f"[后处理过滤] {dimension}审稿人：删除/修正了{total_removed}处越界内容（主要缺陷+修改建议+扣分说明）")
+        print(f"[后处理过滤] {dimension}审稿人：删除/修正了{total_removed}处越界内容（主要缺陷+修改建议+扣分说明，包含所有出现的部分）")
 
     return review_text
 
@@ -469,6 +480,49 @@ def _fix_editor_defects_format(summary: str) -> str:
     return new_summary
 
 
+def _fix_editor_suggestions(summary: str) -> str:
+    """
+    后处理：过滤主编修改建议里的"公开代码"相关条目
+    早期会议论文不公开代码是惯例，不应该列为修改建议
+    """
+    # 匹配"## 六、修改建议清单"到"## 七、"之间的内容
+    pattern = r'(## 六、修改建议清单.*?\n)(.*?)(\n## 七、)'
+    match = re.search(pattern, summary, re.DOTALL)
+    if not match:
+        return summary
+
+    prefix = match.group(1)
+    suggestions_content = match.group(2)
+    suffix = match.group(3)
+
+    # 按编号拆分成条目（匹配 "1. " "2. " 等，包括带**【必须修改】**的）
+    items = re.split(r'(?=\d+\.\s)', suggestions_content.strip())
+    items = [item.strip() for item in items if item.strip()]
+
+    # 过滤掉包含"公开代码""代码公开""未公开代码"的条目
+    filtered_items = []
+    removed_count = 0
+    for item in items:
+        if any(kw in item for kw in ["公开代码", "代码公开", "未公开代码"]):
+            removed_count += 1
+            continue
+        filtered_items.append(item)
+
+    if removed_count == 0:
+        return summary  # 没有需要过滤的条目
+
+    # 重新编号
+    renumbered_items = []
+    for i, item in enumerate(filtered_items, 1):
+        item = re.sub(r'^\d+\.\s', f'{i}. ', item)
+        renumbered_items.append(item)
+
+    new_suggestions_content = '\n'.join(renumbered_items)
+    new_summary = summary[:match.start()] + prefix + new_suggestions_content + suffix + summary[match.end():]
+    print(f"[后处理] 主编修改建议修正：删除了{removed_count}条'公开代码'相关条目")
+    return new_summary
+
+
 def node_editor_summary(state: ReviewState) -> ReviewState:
     """主编汇总：汇总4份审稿意见，给出综合审稿报告"""
     # 如果启用了反思，用修正后的意见；否则用初审意见
@@ -482,8 +536,10 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
-    # 后处理：去掉主要缺陷里的加粗格式，保持格式统一
+    # 后处理：去掉主要缺陷里的加粗格式，保持格式统一，限制最多6条
     summary = _fix_editor_defects_format(summary)
+    # 后处理：过滤修改建议里的"公开代码"相关条目
+    summary = _fix_editor_suggestions(summary)
     state["editor_summary"] = summary
     state["phase"] = ReviewPhase.DONE
     state["full_transcript"].append({
