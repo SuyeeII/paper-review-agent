@@ -68,8 +68,8 @@ CROSS_DIMENSION_KEYWORDS = {
         "收敛性", "稳定性", "理论基础", "方法假设", "方法局限性",
         # ===== 写作维度所有问题 =====
         "语言", "语法", "拼写", "图表规范", "参考文献格式",
-        # ===== 代码铁律：早期会议论文不公开代码是惯例，不应该列为缺陷 =====
-        "未公开代码", "代码公开", "公开代码",
+        # ===== 代码铁律：论文里看不到代码相关情况，不管什么代码都不该评价 =====
+        "代码",
         # ===== PDF解析限制：公式/图/表格无法准确判断 =====
         "公式", "推导", "数学证明", "理论推导", "数学推导", "数学依据", "收敛性证明",
         "图1", "图2", "图3", "图4", "图5", "图6", "图7", "图8", "图9", "图10",
@@ -473,8 +473,8 @@ def _fix_editor_defects_format(summary: str) -> str:
 
 def _fix_editor_suggestions(summary: str) -> str:
     """
-    后处理：过滤主编修改建议里的"公开代码"相关条目
-    早期会议论文不公开代码是惯例，不应该列为修改建议
+    后处理：过滤主编修改建议里的"代码"相关条目，并重新编号
+    论文里看不到代码相关情况，不管什么代码都不该评价
     """
     # 匹配"## 六、修改建议清单"到"## 七、"之间的内容
     pattern = r'(## 六、修改建议清单.*?\n)(.*?)(\n## 七、)'
@@ -486,11 +486,11 @@ def _fix_editor_suggestions(summary: str) -> str:
     suggestions_content = match.group(2)
     suffix = match.group(3)
 
-    # 按编号拆分成条目（匹配 "1. " "2. " 等，包括带**【必须修改】**的）
-    items = re.split(r'(?=\d+\.\s)', suggestions_content.strip())
+    # 按编号拆分成条目（匹配 "1. " "2. " 等，允许编号前有空格）
+    items = re.split(r'(?=\s*\d+\.\s)', suggestions_content.strip())
     items = [item.strip() for item in items if item.strip()]
 
-    # 过滤掉包含"代码"的条目（论文里看不到代码相关情况，不管是公开代码还是代码实现都不该评价）
+    # 过滤掉包含"代码"的条目（论文里看不到代码相关情况，不管什么代码都不该评价）
     filtered_items = []
     removed_count = 0
     for item in items:
@@ -502,15 +502,16 @@ def _fix_editor_suggestions(summary: str) -> str:
     if removed_count == 0:
         return summary  # 没有需要过滤的条目
 
-    # 重新编号
+    # 重新编号：直接构造新的条目，不依赖正则替换（更可靠）
     renumbered_items = []
     for i, item in enumerate(filtered_items, 1):
-        item = re.sub(r'^\d+\.\s', f'{i}. ', item)
-        renumbered_items.append(item)
+        # 去掉原来的编号（允许前面有空格），然后加上新编号
+        item_without_num = re.sub(r'^\s*\d+\.\s*', '', item)
+        renumbered_items.append(f"{i}. {item_without_num}")
 
     new_suggestions_content = '\n'.join(renumbered_items)
     new_summary = summary[:match.start()] + prefix + new_suggestions_content + suffix + summary[match.end():]
-    print(f"[后处理] 主编修改建议修正：删除了{removed_count}条'公开代码'相关条目")
+    print(f"[后处理] 主编修改建议修正：删除了{removed_count}条'代码'相关条目，并重新编号")
     return new_summary
 
 
