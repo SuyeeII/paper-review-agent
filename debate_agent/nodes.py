@@ -708,6 +708,50 @@ def _fix_editor_defects_format(summary: str) -> str:
     return new_summary
 
 
+def _fix_editor_advantages_format(summary: str) -> str:
+    """
+    后处理：对主编主要优点进行去重和重新编号
+    4个审稿人可能重复评价同一个优点（如"结构完整""逻辑清晰"），需要去重
+    """
+    # 匹配"## 三、主要优点"到"## 四、"之间的内容
+    pattern = r'(## 三、主要优点\n)(.*?)(\n## 四、)'
+    match = re.search(pattern, summary, re.DOTALL)
+    if not match:
+        return summary
+
+    prefix = match.group(1)
+    advantages_content = match.group(2)
+    suffix = match.group(3)
+
+    # 按编号拆分成条目（匹配 "1. " "2. " 等）
+    items = re.split(r'(?=\d+\.\s)', advantages_content.strip())
+    items = [item.strip() for item in items if item.strip()]
+
+    if len(items) <= 1:
+        return summary  # 只有1条，不需要去重
+
+    # 去重：4个审稿人可能重复评价同一个优点
+    items, dedup_removed = _deduplicate_items(items, threshold=0.4)
+    if dedup_removed > 0:
+        print(f"[后处理] 主编主要优点去重：去除了{dedup_removed}条重复内容")
+
+    # 重新编号（总是执行，因为去重后编号可能不连续）
+    renumbered_items = []
+    for i, item in enumerate(items, 1):
+        item = re.sub(r'^\d+\.\s', f'{i}. ', item)
+        renumbered_items.append(item)
+
+    new_advantages_content = '\n'.join(renumbered_items)
+
+    # 只要内容有变化（去重、重新编号），就更新
+    if new_advantages_content == advantages_content:
+        return summary  # 内容完全一样，不需要修改
+
+    new_summary = summary[:match.start()] + prefix + new_advantages_content + suffix + summary[match.end():]
+    print("[后处理] 主编主要优点格式修正：去重+重新编号")
+    return new_summary
+
+
 def _fix_editor_suggestions(summary: str) -> str:
     """
     后处理：过滤主编修改建议里的"代码"相关条目，并重新编号
@@ -792,6 +836,8 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
+    # 后处理：对主要优点进行去重和重新编号
+    summary = _fix_editor_advantages_format(summary)
     # 后处理：去掉主要缺陷里的加粗格式，保持格式统一，限制最多6条
     summary = _fix_editor_defects_format(summary)
     # 后处理：过滤修改建议里的"代码"相关条目
