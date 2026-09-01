@@ -46,28 +46,13 @@ CROSS_DIMENSION_KEYWORDS = {
 }
 
 
-def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
+def _filter_section_items(content: str, keywords: list) -> tuple:
     """
-    后处理过滤：删掉审稿人输出中越界的主要缺陷条目
-    这是第二层防护，不依赖LLM遵守prompt，100%可靠
+    过滤一个section（主要缺陷/具体修改建议）里的条目
+    返回 (过滤后的内容, 删除的条目数)
     """
-    if dimension not in CROSS_DIMENSION_KEYWORDS:
-        return review_text
-
-    keywords = CROSS_DIMENSION_KEYWORDS[dimension]
-
-    # 匹配"**主要缺陷**："到下一个"**"开头的部分之间的内容
-    pattern = r'(\*\*主要缺陷\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
-    match = re.search(pattern, review_text, re.DOTALL)
-    if not match:
-        return review_text
-
-    prefix = match.group(1)
-    defects_content = match.group(2)
-    suffix = match.group(3)
-
     # 按编号拆分成条目（匹配 "1. " "2. " 等）
-    items = re.split(r'(?=\d+\.\s)', defects_content.strip())
+    items = re.split(r'(?=\d+\.\s)', content.strip())
     items = [item.strip() for item in items if item.strip()]
 
     # 过滤掉包含越界关键词的条目
@@ -79,28 +64,97 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
             continue
         filtered_items.append(item)
 
-    if removed_count == 0:
-        return review_text
-
     # 重新编号
     renumbered_items = []
     for i, item in enumerate(filtered_items, 1):
-        # 把原来的编号替换成新编号
         item = re.sub(r'^\d+\.\s', f'{i}. ', item)
         renumbered_items.append(item)
 
-    new_defects_content = '\n'.join(renumbered_items)
-    if not new_defects_content:
-        new_defects_content = "（本维度未发现明显缺陷）"
+    new_content = '\n'.join(renumbered_items)
+    if not new_content:
+        new_content = "（本维度未发现明显问题）"
 
-    new_review_text = (
-        review_text[:match.start()]
-        + prefix + new_defects_content + suffix
-        + review_text[match.end():]
-    )
+    return new_content, removed_count
 
-    print(f"[后处理过滤] {dimension}审稿人：删除了{removed_count}条越界的主要缺陷")
-    return new_review_text
+
+def _filter_deduction_note(content: str, keywords: list, dimension: str) -> str:
+    """
+    过滤扣分说明里的越界关键词
+    如果扣分说明包含越界关键词，就替换成更通用的表述
+    """
+    if any(kw in content for kw in keywords):
+        # 替换成通用表述
+        generic_notes = {
+            "innovation": "扣分主要因为创新性描述不够具体、相关工作对比不足、技术贡献有限。",
+            "methodology": "扣分主要因为理论推导不够严谨、方法假设不够清晰、技术路线描述不够明确。",
+            "experiment": "扣分主要因为实验设计不够充分、结果可靠性有待提升、可复现性细节不够完善。",
+            "writing": "扣分主要因为语言表达不够准确、结构不够清晰、参考文献格式不够规范。",
+        }
+        return generic_notes.get(dimension, content)
+    return content
+
+
+def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
+    """
+    后处理过滤：删掉审稿人输出中越界的主要缺陷、具体修改建议，修正扣分说明
+    这是第二层防护，不依赖LLM遵守prompt，100%可靠
+    """
+    if dimension not in CROSS_DIMENSION_KEYWORDS:
+        return review_text
+
+    keywords = CROSS_DIMENSION_KEYWORDS[dimension]
+    total_removed = 0
+
+    # ===== 1. 过滤"主要缺陷"部分 =====
+    pattern_defects = r'(\*\*主要缺陷\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
+    match = re.search(pattern_defects, review_text, re.DOTALL)
+    if match:
+        prefix = match.group(1)
+        defects_content = match.group(2)
+        suffix = match.group(3)
+        new_defects, removed = _filter_section_items(defects_content, keywords)
+        total_removed += removed
+        review_text = (
+            review_text[:match.start()]
+            + prefix + new_defects + suffix
+            + review_text[match.end():]
+        )
+
+    # ===== 2. 过滤"具体修改建议"部分 =====
+    pattern_suggestions = r'(\*\*具体修改建议\*\*[：:]\s*\n)(.*?)(\n\*\*[^\*]+\*\*[：:])'
+    match = re.search(pattern_suggestions, review_text, re.DOTALL)
+    if match:
+        prefix = match.group(1)
+        suggestions_content = match.group(2)
+        suffix = match.group(3)
+        new_suggestions, removed = _filter_section_items(suggestions_content, keywords)
+        total_removed += removed
+        review_text = (
+            review_text[:match.start()]
+            + prefix + new_suggestions + suffix
+            + review_text[match.end():]
+        )
+
+    # ===== 3. 修正"扣分说明"部分 =====
+    pattern_deduction = r'(\*\*扣分说明\*\*[：:]\s*)(.*?)(\n|$)'
+    match = re.search(pattern_deduction, review_text, re.DOTALL)
+    if match:
+        prefix = match.group(1)
+        deduction_content = match.group(2)
+        suffix = match.group(3)
+        new_deduction = _filter_deduction_note(deduction_content, keywords, dimension)
+        if new_deduction != deduction_content:
+            total_removed += 1
+            review_text = (
+                review_text[:match.start()]
+                + prefix + new_deduction + suffix
+                + review_text[match.end():]
+            )
+
+    if total_removed > 0:
+        print(f"[后处理过滤] {dimension}审稿人：删除/修正了{total_removed}处越界内容（主要缺陷+修改建议+扣分说明）")
+
+    return review_text
 
 
 # ===== 论文结构解析节点 =====
