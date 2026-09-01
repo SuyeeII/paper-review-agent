@@ -3,9 +3,9 @@
 """
 from typing import Optional
 import re
-from debate_agent.state import ReviewState, ReviewPhase
-from debate_agent.llm import get_llm
-from debate_agent.prompts import (
+from paper_review_agent.state import ReviewState, ReviewPhase
+from paper_review_agent.llm import get_llm
+from paper_review_agent.prompts import (
     get_paper_structure_prompt,
     get_innovation_review_prompt,
     get_methodology_review_prompt,

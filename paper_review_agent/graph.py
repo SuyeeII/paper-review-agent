@@ -3,8 +3,8 @@
 """
 from typing import Optional, Callable, List
 from langgraph.graph import StateGraph, END
-from debate_agent.state import ReviewState, ReviewPhase, init_state
-from debate_agent import nodes
+from paper_review_agent.state import ReviewState, ReviewPhase, init_state
+from paper_review_agent import nodes
 
 
 def node_review_done(state: ReviewState) -> ReviewState:

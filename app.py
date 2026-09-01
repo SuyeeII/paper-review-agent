@@ -6,8 +6,8 @@ import os
 import re
 import tempfile
 import gradio as gr
-from debate_agent import run_review, format_review_result
-from debate_agent.state import ReviewState
+from paper_review_agent import run_review, format_review_result
+from paper_review_agent.state import ReviewState
 
 try:
     from PyPDF2 import PdfReader
