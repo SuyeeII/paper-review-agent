@@ -1,14 +1,20 @@
 """LLM 客户端封装
 支持 智谱GLM / OpenAI / DeepSeek 等兼容 OpenAI 接口的模型
 V1.5 新增：超时控制 + 指数退避重试，解决 API 调用卡死问题
+V1.6 新增：内存缓存机制，同一prompt重复调用时直接返回缓存结果，提升速度
 """
 import os
 import time
+import hashlib
 from typing import Optional, List
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 简单的内存缓存（只在当前进程内有效，重新运行app.py后自动清空）
+_llm_cache = {}
+_CACHE_MAX_SIZE = 100  # 最多缓存100条结果，防止内存占用过大
 
 
 class LLMClient:
@@ -46,7 +52,17 @@ class LLMClient:
         带指数退避重试的 LLM 调用
         遇到网络错误、超时、限流时自动重试，最多 max_retries 次
         等待时间：1s → 2s → 4s（指数退避）
+        新增：内存缓存机制，相同的messages+temperature直接返回缓存结果
         """
+        # 生成缓存key：基于messages的内容和temperature
+        cache_key_content = str(messages) + str(temperature if temperature is not None else self.temperature)
+        cache_key = hashlib.md5(cache_key_content.encode('utf-8')).hexdigest()
+
+        # 检查缓存
+        if cache_key in _llm_cache:
+            print(f"[LLM 缓存] 命中缓存，直接返回结果")
+            return _llm_cache[cache_key]
+
         last_error = None
         for attempt in range(self.max_retries):
             try:
@@ -56,7 +72,15 @@ class LLMClient:
                     temperature=temperature if temperature is not None else self.temperature,
                     max_tokens=self.max_tokens,
                 )
-                return response.choices[0].message.content.strip()
+                result = response.choices[0].message.content.strip()
+
+                # 存入缓存（如果缓存满了，先删除最早的一条）
+                if len(_llm_cache) >= _CACHE_MAX_SIZE:
+                    oldest_key = next(iter(_llm_cache))
+                    del _llm_cache[oldest_key]
+                _llm_cache[cache_key] = result
+
+                return result
             except Exception as e:
                 last_error = e
                 if attempt < self.max_retries - 1:

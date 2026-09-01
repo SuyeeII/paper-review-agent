@@ -428,6 +428,124 @@ def _fix_editor_total_score(summary: str) -> str:
     return summary
 
 
+def _deduplicate_items(items: list, threshold: float = 0.5) -> tuple:
+    """
+    对条目列表进行去重，基于关键词相似度
+    返回 (去重后的列表, 去除的重复条目数量)
+    """
+    if len(items) <= 1:
+        return items, 0
+
+    # 简单的中文停用词
+    stop_words = set("的了是在和有与及对这那也都就而但如果因为所以我们你们他们它们一个一些一种这些那些可以能够需要应该通过进行基于以及等等".split())
+
+    def extract_keywords(text: str) -> set:
+        """提取关键词：去掉编号、标点、停用词，保留2字以上的词"""
+        # 去掉编号
+        text = re.sub(r'^\d+\.\s*', '', text)
+        # 去掉加粗标记
+        text = text.replace('**', '')
+        # 去掉标点和特殊字符
+        text = re.sub(r'[，。、；：！？""''（）【】《》\s\.\,\;\:\!\?\(\)\[\]<>]', ' ', text)
+        # 简单分词：按空格分割，然后过滤
+        words = text.split()
+        keywords = set()
+        for w in words:
+            if len(w) >= 2 and w not in stop_words:
+                keywords.add(w)
+        # 对于中文连续文本，再做简单的2-gram切分
+        chinese_chars = re.findall(r'[\u4e00-\u9fa5]{2,}', text)
+        for seg in chinese_chars:
+            for i in range(len(seg) - 1):
+                bigram = seg[i:i+2]
+                if bigram not in stop_words:
+                    keywords.add(bigram)
+        return keywords
+
+    unique_items = []
+    removed_count = 0
+    item_keywords = []
+
+    for item in items:
+        kw = extract_keywords(item)
+        is_duplicate = False
+        for i, existing_kw in enumerate(item_keywords):
+            if len(kw) == 0 or len(existing_kw) == 0:
+                continue
+            # 计算Jaccard相似度
+            intersection = len(kw & existing_kw)
+            union = len(kw | existing_kw)
+            similarity = intersection / union if union > 0 else 0
+            if similarity >= threshold:
+                is_duplicate = True
+                removed_count += 1
+                break
+        if not is_duplicate:
+            unique_items.append(item)
+            item_keywords.append(kw)
+
+    return unique_items, removed_count
+
+
+def _filter_editor_defects_by_dimension(items: list) -> tuple:
+    """
+    主编主要缺陷的维度归属校验
+    检查每条缺陷是否明显属于其他维度，如果是就过滤掉
+    返回 (过滤后的列表, 去除的越界条目数量)
+    """
+    # 各维度的核心关键词（用于判断一条缺陷主要属于哪个维度）
+    dimension_keywords = {
+        "innovation": ["创新点", "创新性", "相关工作", "技术贡献", "研究时效", "与现有", "对比分析"],
+        "methodology": ["方法合理", "技术路线", "理论依据", "理论基础", "方法假设", "方法局限", "收敛性", "稳定性", "参数设置", "算法原理"],
+        "experiment": ["实验设计", "实验结果", "实验设置", "对比实验", "消融实验", "数据集", "评价指标", "统计显著", "论证", "证据", "数据支撑"],
+        "writing": ["语言", "语法", "拼写", "表达", "结构清晰", "文字", "术语", "参考文献"],
+    }
+
+    filtered_items = []
+    removed_count = 0
+
+    for item in items:
+        # 提取来源标注（如"（创新性审稿人）"）
+        source_match = re.search(r'[（(](\w+?)审稿人[）)]', item)
+        if not source_match:
+            # 没有来源标注，保留
+            filtered_items.append(item)
+            continue
+
+        source = source_match.group(1)
+        # 映射来源到维度key
+        source_dim_map = {
+            "创新性": "innovation",
+            "方法论": "methodology",
+            "论证与证据": "experiment",
+            "写作表达": "writing",
+        }
+        source_dim = source_dim_map.get(source)
+        if not source_dim:
+            filtered_items.append(item)
+            continue
+
+        # 检查这条缺陷是否主要属于其他维度
+        other_dim_scores = {}
+        for dim, keywords in dimension_keywords.items():
+            if dim == source_dim:
+                continue
+            score = sum(1 for kw in keywords if kw in item)
+            other_dim_scores[dim] = score
+
+        # 如果属于其他维度的关键词数量明显多于来源维度，就过滤掉
+        source_score = sum(1 for kw in dimension_keywords[source_dim] if kw in item)
+        max_other_score = max(other_dim_scores.values()) if other_dim_scores else 0
+
+        if max_other_score > source_score and max_other_score >= 2:
+            removed_count += 1
+            continue
+
+        filtered_items.append(item)
+
+    return filtered_items, removed_count
+
+
 def _fix_editor_defects_format(summary: str) -> str:
     """
     后处理：去掉主编主要缺陷里的加粗格式，保持格式统一，同时限制最多6条
@@ -452,6 +570,18 @@ def _fix_editor_defects_format(summary: str) -> str:
 
     original_count = len(items)
     modified = False
+
+    # 先做维度归属校验：过滤掉明显属于其他维度的缺陷
+    items, dimension_removed = _filter_editor_defects_by_dimension(items)
+    if dimension_removed > 0:
+        modified = True
+        print(f"[后处理] 主编主要缺陷维度归属校验：去除了{dimension_removed}条越界内容")
+
+    # 再去重：4个审稿人可能重复评价同一个问题
+    items, dedup_removed = _deduplicate_items(items, threshold=0.4)
+    if dedup_removed > 0:
+        modified = True
+        print(f"[后处理] 主编主要缺陷去重：去除了{dedup_removed}条重复内容")
 
     # 限制最多6条，超过的话只保留前6条（最严重的）
     if len(items) > 6:
@@ -510,8 +640,11 @@ def _fix_editor_suggestions(summary: str) -> str:
             continue
         filtered_items.append(item)
 
-    if removed_count == 0:
-        return summary  # 没有需要过滤的条目
+    # 去重：4个审稿人可能重复提出相同的修改建议
+    filtered_items, dedup_removed = _deduplicate_items(filtered_items, threshold=0.4)
+
+    if removed_count == 0 and dedup_removed == 0:
+        return summary  # 没有需要过滤或去重的条目
 
     # 重新编号：直接构造新的条目，不依赖正则替换（更可靠）
     renumbered_items = []
