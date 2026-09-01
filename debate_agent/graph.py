@@ -7,13 +7,28 @@ from debate_agent.state import ReviewState, ReviewPhase, init_state
 from debate_agent import nodes
 
 
+def node_review_done(state: ReviewState) -> ReviewState:
+    """汇聚节点：等待4个审稿节点都完成后，什么都不做，直接返回"""
+    return state
+
+
+def node_start_reflection(state: ReviewState) -> ReviewState:
+    """开始反思修正阶段的节点：什么都不做，只是出发到4个并行反思修正节点"""
+    return state
+
+
+def node_reflection_done(state: ReviewState) -> ReviewState:
+    """汇聚节点：等待4个反思修正节点都完成后，什么都不做，直接返回"""
+    return state
+
+
 def build_graph() -> StateGraph:
     """
     构建审稿流程图
 
     流程：
-    START → 4个并行审稿节点 → 路由判断
-        ├─ reflection_enabled → 4个并行反思修正节点 → 主编汇总 → END
+    START → 论文结构解析 → 4个并行审稿节点 → 汇聚节点 → 路由判断
+        ├─ reflection_enabled → 开始反思节点 → 4个并行反思修正节点 → 汇聚节点 → 主编汇总 → END
         └─ !reflection_enabled → 主编汇总 → END
     """
     workflow = StateGraph(ReviewState)
@@ -28,38 +43,62 @@ def build_graph() -> StateGraph:
     workflow.add_node("experiment_review", nodes.node_experiment_review)
     workflow.add_node("writing_review", nodes.node_writing_review)
 
+    # 汇聚节点：等待4个审稿节点都完成
+    workflow.add_node("review_done", node_review_done)
+
     # 4个维度反思修正节点（并行，仅当reflection_enabled时执行）
     workflow.add_node("innovation_reflection", nodes.node_innovation_reflection)
     workflow.add_node("methodology_reflection", nodes.node_methodology_reflection)
     workflow.add_node("experiment_reflection", nodes.node_experiment_reflection)
     workflow.add_node("writing_reflection", nodes.node_writing_reflection)
 
+    # 反思阶段开始节点和汇聚节点
+    workflow.add_node("start_reflection", node_start_reflection)
+    workflow.add_node("reflection_done", node_reflection_done)
+
     # 主编汇总节点
     workflow.add_node("editor_summary", nodes.node_editor_summary)
 
     # ===== 边定义 =====
-    # 起点 → 论文结构解析 → 4个并行审稿节点
+    # 起点 → 论文结构解析
     workflow.set_entry_point("paper_structure")
-    workflow.add_edge("paper_structure", "innovation_review")
-    workflow.add_edge("innovation_review", "methodology_review")
-    workflow.add_edge("methodology_review", "experiment_review")
-    workflow.add_edge("experiment_review", "writing_review")
 
-    # 4个审稿完成 → 路由判断
+    # 论文结构解析 → 4个并行审稿节点
+    workflow.add_edge("paper_structure", "innovation_review")
+    workflow.add_edge("paper_structure", "methodology_review")
+    workflow.add_edge("paper_structure", "experiment_review")
+    workflow.add_edge("paper_structure", "writing_review")
+
+    # 4个审稿节点都完成后 → 汇聚节点
+    workflow.add_edge("innovation_review", "review_done")
+    workflow.add_edge("methodology_review", "review_done")
+    workflow.add_edge("experiment_review", "review_done")
+    workflow.add_edge("writing_review", "review_done")
+
+    # 汇聚节点 → 路由判断（是否需要反思修正）
     workflow.add_conditional_edges(
-        "writing_review",
+        "review_done",
         nodes.route_after_review,
         {
-            "reflection": "innovation_reflection",
+            "reflection": "start_reflection",
             "summary": "editor_summary",
         },
     )
 
-    # 反思修正路径：4个并行反思节点 → 主编汇总
-    workflow.add_edge("innovation_reflection", "methodology_reflection")
-    workflow.add_edge("methodology_reflection", "experiment_reflection")
-    workflow.add_edge("experiment_reflection", "writing_reflection")
-    workflow.add_edge("writing_reflection", "editor_summary")
+    # 开始反思节点 → 4个并行反思修正节点
+    workflow.add_edge("start_reflection", "innovation_reflection")
+    workflow.add_edge("start_reflection", "methodology_reflection")
+    workflow.add_edge("start_reflection", "experiment_reflection")
+    workflow.add_edge("start_reflection", "writing_reflection")
+
+    # 4个反思修正节点都完成后 → 汇聚节点
+    workflow.add_edge("innovation_reflection", "reflection_done")
+    workflow.add_edge("methodology_reflection", "reflection_done")
+    workflow.add_edge("experiment_reflection", "reflection_done")
+    workflow.add_edge("writing_reflection", "reflection_done")
+
+    # 反思汇聚节点 → 主编汇总
+    workflow.add_edge("reflection_done", "editor_summary")
 
     # 主编汇总 → 结束
     workflow.add_edge("editor_summary", END)
