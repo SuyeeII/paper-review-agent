@@ -16,129 +16,6 @@ except ImportError:
     HAS_PYPDF2 = False
 
 
-def generate_html_report(markdown_content: str, title: str = "论文审稿报告") -> str:
-    """
-    生成美观的HTML审稿报告
-    用户可以用浏览器打开后打印为PDF
-    返回HTML文件的临时路径
-    """
-    try:
-        # 简单的Markdown转HTML（处理基本格式）
-        html_content = markdown_content
-        # 处理标题
-        html_content = re.sub(r'^# (.+)$', r'<h1>\1</h1>', html_content, flags=re.MULTILINE)
-        html_content = re.sub(r'^## (.+)$', r'<h2>\1</h2>', html_content, flags=re.MULTILINE)
-        html_content = re.sub(r'^### (.+)$', r'<h3>\1</h3>', html_content, flags=re.MULTILINE)
-        # 处理加粗
-        html_content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html_content)
-        # 处理表格（简单处理）
-        html_content = re.sub(r'\|(.+)\|', r'<tr><td>\1</td></tr>', html_content)
-        html_content = html_content.replace('|', '</td><td>')
-        # 处理列表
-        html_content = re.sub(r'^\d+\. (.+)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
-        html_content = re.sub(r'^- (.+)$', r'<li>\1</li>', html_content, flags=re.MULTILINE)
-        # 处理换行
-        html_content = html_content.replace('\n', '<br>\n')
-
-        html_template = f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{title}</title>
-    <style>
-        body {{
-            font-family: "Microsoft YaHei", "SimHei", sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            line-height: 1.8;
-            color: #333;
-            background-color: #fff;
-        }}
-        h1 {{
-            color: #2c3e50;
-            border-bottom: 3px solid #3498db;
-            padding-bottom: 10px;
-            margin-top: 30px;
-        }}
-        h2 {{
-            color: #2980b9;
-            border-left: 4px solid #3498db;
-            padding-left: 15px;
-            margin-top: 25px;
-        }}
-        h3 {{
-            color: #34495e;
-            margin-top: 20px;
-        }}
-        table {{
-            border-collapse: collapse;
-            width: 100%;
-            margin: 15px 0;
-        }}
-        td, th {{
-            border: 1px solid #ddd;
-            padding: 10px 15px;
-            text-align: left;
-        }}
-        tr:nth-child(even) {{
-            background-color: #f8f9fa;
-        }}
-        li {{
-            margin: 8px 0;
-        }}
-        strong {{
-            color: #e74c3c;
-        }}
-        .header {{
-            text-align: center;
-            margin-bottom: 40px;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 10px;
-        }}
-        .header h1 {{
-            color: white;
-            border: none;
-            margin: 0;
-        }}
-        @media print {{
-            body {{
-                padding: 20px;
-            }}
-            .header {{
-                background: #667eea !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📝 {title}</h1>
-        <p>论文多视角审稿助手 · 自动生成</p>
-    </div>
-    {html_content}
-    <hr>
-    <p style="text-align: center; color: #999; font-size: 12px;">
-        本报告由论文多视角审稿助手自动生成，仅供参考，最终审稿决定请以期刊/会议官方意见为准。
-    </p>
-</body>
-</html>"""
-
-        tmp_file = tempfile.NamedTemporaryFile(suffix='.html', delete=False, mode='w', encoding='utf-8')
-        tmp_file.write(html_template)
-        tmp_file.close()
-        return tmp_file.name
-
-    except Exception as e:
-        print(f"[HTML导出] 生成失败: {e}")
-        return None
-
-
 def parse_paper_file(file_obj) -> str:
     """
     解析上传的论文文件，提取文本内容
@@ -194,11 +71,11 @@ def run_review_ui(paper_content: str):
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
     if not paper_content or not paper_content.strip():
-        yield "请先上传论文文件（PDF / TXT / MD）！", "", "", "", "", "", "", None, "❌ 未上传论文文件，请先上传", None
+        yield "请先上传论文文件（PDF / TXT / MD）！", "", "", "", "", "", "", None, "❌ 未上传论文文件，请先上传"
         return
 
     # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）
-    yield "", "", "", "", "", "", "", None, "正在审稿，请稍等几分钟...", None
+    yield "", "", "", "", "", "", "", None, "正在审稿，请稍等几分钟..."
 
     # 运行审稿（同步执行，因为LangGraph invoke是同步的）
     try:
@@ -220,7 +97,7 @@ def run_review_ui(paper_content: str):
             friendly_msg = "❌ API Key 无效。请检查 .env 文件中的 ZHIPU_API_KEY 是否正确。"
         else:
             friendly_msg = f"❌ 审稿运行出错：{error_msg[:200]}"
-        yield friendly_msg, "", "", "", "", "", "", None, "", None
+        yield friendly_msg, "", "", "", "", "", "", None, ""
         return
 
     # 提取各部分内容
@@ -246,12 +123,7 @@ def run_review_ui(paper_content: str):
         print(f"[导出] 保存失败: {e}")
         export_path = None
 
-    # 导出为HTML文件（用户可以用浏览器打开后打印为PDF）
-    html_export_path = generate_html_report(full_text, "论文多视角审稿报告")
-    if html_export_path:
-        print(f"[HTML导出] 已保存到: {html_export_path}")
-
-    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, full_text, export_path, "✅ 审稿完成！", html_export_path
+    yield structure_text, innovation_text, methodology_text, experiment_text, writing_text, summary_text, full_text, export_path, "✅ 审稿完成！"
 
 
 # ===== Gradio 界面 =====
@@ -310,15 +182,14 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
         interactive=False,
     )
     with gr.Row():
-        export_file = gr.File(label="📥 导出 Markdown", interactive=False)
-        html_export_file = gr.File(label="📥 导出 HTML（可浏览器打开后打印为PDF）", interactive=False)
+        export_file = gr.File(label="📥 导出审稿报告（Markdown，审稿完成后可下载）", interactive=False)
 
     # 事件绑定
     run_button.click(
         fn=run_review_ui,
         inputs=[paper_content_state],
         outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
-                 summary_md, full_text_box, export_file, status_text, html_export_file],
+                 summary_md, full_text_box, export_file, status_text],
     )
 
     # 页脚
