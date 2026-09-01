@@ -31,7 +31,7 @@ CROSS_DIMENSION_KEYWORDS = {
         "可复现", "复现", "代码",
         # ===== 方法论维度所有问题 =====
         "方法合理性", "技术路线", "理论依据",
-        "收敛性", "稳定性", "理论基础", "方法假设", "方法局限性",
+        "收敛性", "稳定性", "理论基础", "方法假设", "方法局限性", "局限性", "算法的局限性",
         "理论推导", "数学推导", "数学依据", "收敛性证明",
         # ===== 写作维度所有问题 =====
         "语言", "语法", "拼写", "图表规范", "参考文献格式",
@@ -96,7 +96,8 @@ CROSS_DIMENSION_KEYWORDS = {
         "表1", "表2", "表3", "表4", "表5", "表6", "表7", "表8", "表9", "表10",
         "坐标轴", "图例", "表格",
         # ===== 写作审稿人只评价文字表达，不评价内容本身 =====
-        "不够充分", "不够深入", "不够详细", "不够具体", "内容不充分", "描述不详细", "分析不深入", "描述不够具体",
+        "不够充分", "不够深入", "不够详细", "不够具体", "过于简略", "内容不充分", "描述不详细", "分析不深入", "描述不够具体",
+        "相关工作介绍", "算法描述", "计算过程", "动态半径设置策略的计算过程",
         # 注意：写作审稿人可以评价语言/语法/拼写/结构逻辑/参考文献格式/文字表达是否清晰，这些不过滤
     ],
 }
@@ -416,9 +417,10 @@ def _fix_editor_total_score(summary: str) -> str:
 
 def _fix_editor_defects_format(summary: str) -> str:
     """
-    后处理：去掉主编主要缺陷里的加粗格式，保持格式统一
+    后处理：去掉主编主要缺陷里的加粗格式，保持格式统一，同时限制最多6条
     有些审稿人的主要缺陷里有加粗标题（如**实验部分文字描述不足**：...），
     主编汇总时直接复制会导致有的条目加粗有的不加粗，格式不一致。
+    同时主编经常列出超过6条主要缺陷，需要截断只保留前6条（最严重的）。
     """
     # 匹配"## 四、主要缺陷"到"## 五、"之间的内容
     pattern = r'(## 四、主要缺陷\n.*?\n)(.*?)(\n## 五、)'
@@ -430,15 +432,37 @@ def _fix_editor_defects_format(summary: str) -> str:
     defects_content = match.group(2)
     suffix = match.group(3)
 
-    # 去掉加粗格式：把**...**替换成...
-    # 但要注意不要去掉"（创新性审稿人）"这种括号里的内容
-    new_defects_content = re.sub(r'\*\*(.+?)\*\*', r'\1', defects_content)
+    # 按编号拆分成条目（匹配 "1. " "2. " 等）
+    items = re.split(r'(?=\d+\.\s)', defects_content.strip())
+    items = [item.strip() for item in items if item.strip()]
 
-    if new_defects_content == defects_content:
-        return summary  # 没有加粗，不需要修改
+    modified = False
+
+    # 限制最多6条，超过的话只保留前6条（最严重的）
+    if len(items) > 6:
+        items = items[:6]
+        modified = True
+        print(f"[后处理] 主编主要缺陷数量修正：原来有{len(items)}条，截断为6条")
+
+    # 重新编号
+    renumbered_items = []
+    for i, item in enumerate(items, 1):
+        item = re.sub(r'^\d+\.\s', f'{i}. ', item)
+        renumbered_items.append(item)
+
+    new_defects_content = '\n'.join(renumbered_items)
+
+    # 去掉加粗格式：把**...**替换成...
+    new_defects_content = re.sub(r'\*\*(.+?)\*\*', r'\1', new_defects_content)
+
+    if new_defects_content == defects_content and not modified:
+        return summary  # 没有修改，不需要更新
 
     new_summary = summary[:match.start()] + prefix + new_defects_content + suffix + summary[match.end():]
-    print("[后处理] 主编主要缺陷格式修正：去掉了加粗，保持格式统一")
+    if modified:
+        print("[后处理] 主编主要缺陷格式修正：去掉了加粗，保持格式统一，限制最多6条")
+    else:
+        print("[后处理] 主编主要缺陷格式修正：去掉了加粗，保持格式统一")
     return new_summary
 
 
