@@ -499,11 +499,11 @@ def _fix_editor_suggestions(summary: str) -> str:
     items = re.split(r'(?=\d+\.\s)', suggestions_content.strip())
     items = [item.strip() for item in items if item.strip()]
 
-    # 过滤掉包含"公开代码""代码公开""未公开代码"的条目
+    # 过滤掉包含"代码"的条目（论文里看不到代码相关情况，不管是公开代码还是代码实现都不该评价）
     filtered_items = []
     removed_count = 0
     for item in items:
-        if any(kw in item for kw in ["公开代码", "代码公开", "未公开代码"]):
+        if "代码" in item:
             removed_count += 1
             continue
         filtered_items.append(item)
