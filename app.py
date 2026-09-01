@@ -81,8 +81,21 @@ def run_review_ui(paper_content: str):
             topic=paper_content.strip(),
         )
     except Exception as e:
-        error_msg = f"❌ 审稿运行出错：{str(e)}"
-        yield error_msg, "", "", "", "", "", "", None, ""
+        error_msg = str(e)
+        # 根据错误类型给出更友好的提示和解决建议
+        if "api_key" in error_msg.lower() or "API Key" in error_msg or "未找到 API Key" in error_msg:
+            friendly_msg = "❌ 未配置 API Key。请在项目根目录创建 .env 文件，设置 ZHIPU_API_KEY（或 OPENAI_API_KEY）、ZHIPU_BASE_URL、ZHIPU_MODEL。"
+        elif "timeout" in error_msg.lower() or "超时" in error_msg or "timed out" in error_msg.lower():
+            friendly_msg = "❌ 模型调用超时。可能是网络不稳定或模型响应慢，请稍后重试，或检查网络连接。"
+        elif "rate limit" in error_msg.lower() or "限流" in error_msg or "429" in error_msg:
+            friendly_msg = "❌ API 调用频率超限。请稍后再试，或检查 API 配额。"
+        elif "connection" in error_msg.lower() or "连接" in error_msg or "网络" in error_msg:
+            friendly_msg = "❌ 网络连接失败。请检查网络连接，或确认 API 地址（ZHIPU_BASE_URL）是否正确。"
+        elif "invalid" in error_msg.lower() and ("key" in error_msg.lower() or "api" in error_msg.lower()):
+            friendly_msg = "❌ API Key 无效。请检查 .env 文件中的 ZHIPU_API_KEY 是否正确。"
+        else:
+            friendly_msg = f"❌ 审稿运行出错：{error_msg[:200]}"
+        yield friendly_msg, "", "", "", "", "", "", None, ""
         return
 
     # 提取各部分内容
