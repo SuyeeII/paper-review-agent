@@ -1,6 +1,7 @@
 """论文多视角审稿助手状态定义（多Agent并行评审架构）"""
-from typing import TypedDict, List, Optional, Dict, Any
+from typing import TypedDict, List, Optional, Dict, Any, Annotated
 from enum import Enum
+import operator
 
 
 class ReviewPhase(str, Enum):
@@ -43,7 +44,7 @@ class ReviewState(TypedDict):
     # ===== 系统 =====
     phase: ReviewPhase                   # 当前阶段
     error: Optional[str]                 # 错误信息
-    full_transcript: List[Dict[str, str]]  # 完整记录 [{reviewer, role, content}]
+    full_transcript: Annotated[List[Dict[str, str]], operator.add]  # 完整记录，并行节点追加时用operator.add合并
 
 
 def init_state(

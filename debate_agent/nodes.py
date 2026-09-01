@@ -224,14 +224,16 @@ def node_paper_structure(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_paper_structure_prompt(state["topic"])
     structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2)
-    state["paper_structure"] = structure
-    state["full_transcript"].append({
-        "reviewer": "structure",
-        "role": "论文结构解析",
-        "content": structure,
-    })
     print("[结构解析] 论文结构解析完成")
-    return state
+    # 只返回修改的字段，full_transcript返回要追加的内容（用operator.add合并）
+    return {
+        "paper_structure": structure,
+        "full_transcript": [{
+            "reviewer": "structure",
+            "role": "论文结构解析",
+            "content": structure,
+        }],
+    }
 
 
 # ===== 4个维度审稿节点（并行执行）=====
@@ -243,14 +245,15 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "innovation")
-    state["innovation_review"] = review
-    state["full_transcript"].append({
-        "reviewer": "innovation",
-        "role": "创新性审稿人（初审）",
-        "content": review,
-    })
     print("[审稿] 创新性审稿完成")
-    return state
+    return {
+        "innovation_review": review,
+        "full_transcript": [{
+            "reviewer": "innovation",
+            "role": "创新性审稿人（初审）",
+            "content": review,
+        }],
+    }
 
 
 def node_methodology_review(state: ReviewState) -> ReviewState:
@@ -260,14 +263,15 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "methodology")
-    state["methodology_review"] = review
-    state["full_transcript"].append({
-        "reviewer": "methodology",
-        "role": "方法论审稿人（初审）",
-        "content": review,
-    })
     print("[审稿] 方法论审稿完成")
-    return state
+    return {
+        "methodology_review": review,
+        "full_transcript": [{
+            "reviewer": "methodology",
+            "role": "方法论审稿人（初审）",
+            "content": review,
+        }],
+    }
 
 
 def node_experiment_review(state: ReviewState) -> ReviewState:
@@ -277,14 +281,15 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，擅长评估实验设计的科学性和结果的可靠性。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "experiment")
-    state["experiment_review"] = review
-    state["full_transcript"].append({
-        "reviewer": "experiment",
-        "role": "实验审稿人（初审）",
-        "content": review,
-    })
     print("[审稿] 实验审稿完成")
-    return state
+    return {
+        "experiment_review": review,
+        "full_transcript": [{
+            "reviewer": "experiment",
+            "role": "实验审稿人（初审）",
+            "content": review,
+        }],
+    }
 
 
 def node_writing_review(state: ReviewState) -> ReviewState:
@@ -294,14 +299,15 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "writing")
-    state["writing_review"] = review
-    state["full_transcript"].append({
-        "reviewer": "writing",
-        "role": "写作审稿人（初审）",
-        "content": review,
-    })
     print("[审稿] 写作审稿完成")
-    return state
+    return {
+        "writing_review": review,
+        "full_transcript": [{
+            "reviewer": "writing",
+            "role": "写作审稿人（初审）",
+            "content": review,
+        }],
+    }
 
 
 # ===== 4个维度反思修正节点（并行执行，仅当reflection_enabled时）=====
@@ -313,14 +319,15 @@ def node_innovation_reflection(state: ReviewState) -> ReviewState:
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，正在对自己的初审意见进行自我反思和修正。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     final = filter_cross_dimension_issues(final, "innovation")
-    state["innovation_final"] = final
-    state["full_transcript"].append({
-        "reviewer": "innovation",
-        "role": "创新性审稿人（反思修正后）",
-        "content": final,
-    })
     print("[反思] 创新性审稿反思修正完成")
-    return state
+    return {
+        "innovation_final": final,
+        "full_transcript": [{
+            "reviewer": "innovation",
+            "role": "创新性审稿人（反思修正后）",
+            "content": final,
+        }],
+    }
 
 
 def node_methodology_reflection(state: ReviewState) -> ReviewState:
@@ -330,14 +337,15 @@ def node_methodology_reflection(state: ReviewState) -> ReviewState:
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，正在对自己的初审意见进行自我反思和修正。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     final = filter_cross_dimension_issues(final, "methodology")
-    state["methodology_final"] = final
-    state["full_transcript"].append({
-        "reviewer": "methodology",
-        "role": "方法论审稿人（反思修正后）",
-        "content": final,
-    })
     print("[反思] 方法论审稿反思修正完成")
-    return state
+    return {
+        "methodology_final": final,
+        "full_transcript": [{
+            "reviewer": "methodology",
+            "role": "方法论审稿人（反思修正后）",
+            "content": final,
+        }],
+    }
 
 
 def node_experiment_reflection(state: ReviewState) -> ReviewState:
@@ -347,14 +355,15 @@ def node_experiment_reflection(state: ReviewState) -> ReviewState:
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文实验审稿人，正在对自己的初审意见进行自我反思和修正。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     final = filter_cross_dimension_issues(final, "experiment")
-    state["experiment_final"] = final
-    state["full_transcript"].append({
-        "reviewer": "experiment",
-        "role": "实验审稿人（反思修正后）",
-        "content": final,
-    })
     print("[反思] 实验审稿反思修正完成")
-    return state
+    return {
+        "experiment_final": final,
+        "full_transcript": [{
+            "reviewer": "experiment",
+            "role": "实验审稿人（反思修正后）",
+            "content": final,
+        }],
+    }
 
 
 def node_writing_reflection(state: ReviewState) -> ReviewState:
@@ -364,14 +373,15 @@ def node_writing_reflection(state: ReviewState) -> ReviewState:
     final = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，正在对自己的初审意见进行自我反思和修正。")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     final = filter_cross_dimension_issues(final, "writing")
-    state["writing_final"] = final
-    state["full_transcript"].append({
-        "reviewer": "writing",
-        "role": "写作审稿人（反思修正后）",
-        "content": final,
-    })
     print("[反思] 写作审稿反思修正完成")
-    return state
+    return {
+        "writing_final": final,
+        "full_transcript": [{
+            "reviewer": "writing",
+            "role": "写作审稿人（反思修正后）",
+            "content": final,
+        }],
+    }
 
 
 # ===== 主编汇总节点 =====
@@ -559,15 +569,16 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = _fix_editor_suggestions(summary)
     # 后处理：去掉"审稿意见冲突说明"部分，并调整后面的编号
     summary = _fix_editor_remove_conflict_section(summary)
-    state["editor_summary"] = summary
-    state["phase"] = ReviewPhase.DONE
-    state["full_transcript"].append({
-        "reviewer": "editor",
-        "role": "主编综合审稿报告",
-        "content": summary,
-    })
     print("[汇总] 主编综合审稿报告完成")
-    return state
+    return {
+        "editor_summary": summary,
+        "phase": ReviewPhase.DONE,
+        "full_transcript": [{
+            "reviewer": "editor",
+            "role": "主编综合审稿报告",
+            "content": summary,
+        }],
+    }
 
 
 # ===== 路由函数 =====
