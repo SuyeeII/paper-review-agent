@@ -516,6 +516,30 @@ def _fix_editor_suggestions(summary: str) -> str:
     return new_summary
 
 
+def _fix_editor_remove_conflict_section(summary: str) -> str:
+    """
+    后处理：去掉主编报告里的"审稿意见冲突说明"部分，并调整后面的编号
+    四个审稿人负责的维度本来就不一样，每个维度只有一个审稿人，根本不存在"冲突"
+    而且其他审稿人根本不评价创新性，不可能和创新性审稿人产生"创新性评价的冲突"
+    这个部分完全是多余的，而且内容经常是编造的
+    """
+    # 匹配"## 五、审稿意见冲突说明"到"## 六、"之间的内容（包括标题行）
+    pattern = r'## 五、审稿意见冲突说明.*?\n(.*?)(?=## 六、)'
+    match = re.search(pattern, summary, re.DOTALL)
+    if not match:
+        return summary
+
+    # 去掉"审稿意见冲突说明"部分
+    summary = summary[:match.start()] + summary[match.end():]
+
+    # 调整编号：六→五，七→六
+    summary = summary.replace("## 六、修改建议清单", "## 五、修改建议清单")
+    summary = summary.replace("## 七、最终结论", "## 六、最终结论")
+
+    print("[后处理] 主编报告修正：去掉了'审稿意见冲突说明'部分，并调整了编号")
+    return summary
+
+
 def node_editor_summary(state: ReviewState) -> ReviewState:
     """主编汇总：汇总4份审稿意见，给出综合审稿报告"""
     # 如果启用了反思，用修正后的意见；否则用初审意见
@@ -531,8 +555,10 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = _fix_editor_total_score(summary)
     # 后处理：去掉主要缺陷里的加粗格式，保持格式统一，限制最多6条
     summary = _fix_editor_defects_format(summary)
-    # 后处理：过滤修改建议里的"公开代码"相关条目
+    # 后处理：过滤修改建议里的"代码"相关条目
     summary = _fix_editor_suggestions(summary)
+    # 后处理：去掉"审稿意见冲突说明"部分，并调整后面的编号
+    summary = _fix_editor_remove_conflict_section(summary)
     state["editor_summary"] = summary
     state["phase"] = ReviewPhase.DONE
     state["full_transcript"].append({
