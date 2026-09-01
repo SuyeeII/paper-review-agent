@@ -335,6 +335,48 @@ def node_writing_reflection(state: ReviewState) -> ReviewState:
 
 # ===== 主编汇总节点 =====
 
+def _fix_editor_total_score(summary: str) -> str:
+    """
+    后处理：自动计算主编综合评分，替换掉LLM可能算错的加法
+    综合评分 = 创新性 + 方法论 + 实验 + 写作 四个维度评分之和
+    """
+    # 匹配各维度评分表格里的分数
+    # 格式：| 创新性 | X | ... |
+    # 格式：| 方法论 | X | ... |
+    # 格式：| 实验可靠性与可复现性 | X | ... |
+    # 格式：| 写作表达 | X | ... |
+    pattern_innovation = r'\|\s*创新性\s*\|\s*(\d+)\s*\|'
+    pattern_methodology = r'\|\s*方法论\s*\|\s*(\d+)\s*\|'
+    pattern_experiment = r'\|\s*实验可靠性与可复现性\s*\|\s*(\d+)\s*\|'
+    pattern_writing = r'\|\s*写作表达\s*\|\s*(\d+)\s*\|'
+
+    match_innovation = re.search(pattern_innovation, summary)
+    match_methodology = re.search(pattern_methodology, summary)
+    match_experiment = re.search(pattern_experiment, summary)
+    match_writing = re.search(pattern_writing, summary)
+
+    if not all([match_innovation, match_methodology, match_experiment, match_writing]):
+        return summary  # 匹配不到就不修改
+
+    innovation_score = int(match_innovation.group(1))
+    methodology_score = int(match_methodology.group(1))
+    experiment_score = int(match_experiment.group(1))
+    writing_score = int(match_writing.group(1))
+
+    total_score = innovation_score + methodology_score + experiment_score + writing_score
+
+    # 替换综合评分
+    # 格式：| **综合评分** | **X/40** | |
+    pattern_total = r'(\|\s*\*\*综合评分\*\*\s*\|\s*\*\*)\d+(/40\*\*\s*\|)'
+    match_total = re.search(pattern_total, summary)
+    if match_total:
+        new_summary = summary[:match_total.start()] + match_total.group(1) + str(total_score) + match_total.group(2) + summary[match_total.end():]
+        print(f"[后处理] 主编综合评分修正：LLM算错了，正确应为{total_score}/40（{innovation_score}+{methodology_score}+{experiment_score}+{writing_score}）")
+        return new_summary
+
+    return summary
+
+
 def node_editor_summary(state: ReviewState) -> ReviewState:
     """主编汇总：汇总4份审稿意见，给出综合审稿报告"""
     # 如果启用了反思，用修正后的意见；否则用初审意见
@@ -346,6 +388,8 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     llm = get_llm()
     prompt = get_editor_summary_prompt(state["topic"], innovation, methodology, experiment, writing)
     summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3)
+    # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
+    summary = _fix_editor_total_score(summary)
     state["editor_summary"] = summary
     state["phase"] = ReviewPhase.DONE
     state["full_transcript"].append({
