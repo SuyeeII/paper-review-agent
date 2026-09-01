@@ -377,6 +377,34 @@ def _fix_editor_total_score(summary: str) -> str:
     return summary
 
 
+def _fix_editor_defects_format(summary: str) -> str:
+    """
+    后处理：去掉主编主要缺陷里的加粗格式，保持格式统一
+    有些审稿人的主要缺陷里有加粗标题（如**实验部分文字描述不足**：...），
+    主编汇总时直接复制会导致有的条目加粗有的不加粗，格式不一致。
+    """
+    # 匹配"## 四、主要缺陷"到"## 五、"之间的内容
+    pattern = r'(## 四、主要缺陷\n.*?\n)(.*?)(\n## 五、)'
+    match = re.search(pattern, summary, re.DOTALL)
+    if not match:
+        return summary
+
+    prefix = match.group(1)
+    defects_content = match.group(2)
+    suffix = match.group(3)
+
+    # 去掉加粗格式：把**...**替换成...
+    # 但要注意不要去掉"（创新性审稿人）"这种括号里的内容
+    new_defects_content = re.sub(r'\*\*(.+?)\*\*', r'\1', defects_content)
+
+    if new_defects_content == defects_content:
+        return summary  # 没有加粗，不需要修改
+
+    new_summary = summary[:match.start()] + prefix + new_defects_content + suffix + summary[match.end():]
+    print("[后处理] 主编主要缺陷格式修正：去掉了加粗，保持格式统一")
+    return new_summary
+
+
 def node_editor_summary(state: ReviewState) -> ReviewState:
     """主编汇总：汇总4份审稿意见，给出综合审稿报告"""
     # 如果启用了反思，用修正后的意见；否则用初审意见
@@ -390,6 +418,8 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
+    # 后处理：去掉主要缺陷里的加粗格式，保持格式统一
+    summary = _fix_editor_defects_format(summary)
     state["editor_summary"] = summary
     state["phase"] = ReviewPhase.DONE
     state["full_transcript"].append({
