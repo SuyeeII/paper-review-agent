@@ -63,7 +63,7 @@ def fetch_venue_notes(venue: str, limit: int = 30) -> list:
       - 有 title
       - 有 PDF 附件（content.pdf.value）
     """
-    query = urllib.parse.quote(f'content.venue={venue}')
+    query = urllib.parse.urlencode({"content.venue": venue})
     url = f"{API_BASE}/notes?{query}&limit={limit}"
     print(f"[OpenReview] 拉取 {venue} 论文...")
     data = http_get(url)
@@ -150,14 +150,11 @@ def _extract_defects(review: str) -> list:
     return [i for i in items if i and "未发现明显问题" not in i]
 
 
-def run_system_review(pdf_path: str) -> dict:
-    """系统审稿：返回系统缺陷条目列表 + 完整报告"""
-    parsed = parse_paper_file(pdf_path)
-    paper_text = parsed["text"]
+def run_system_review(paper_text: str) -> dict:
+    """系统审稿：返回系统缺陷条目列表 + 完整报告（直接吃论文全文文本）"""
     if not paper_text.strip():
-        raise RuntimeError("PDF 无文本（可能是扫描件）")
-    state = run_review(paper_text, tables_md=parsed.get("tables_md", ""),
-                       images=parsed.get("images", 0), tables=parsed.get("tables", 0))
+        raise RuntimeError("论文文本为空")
+    state = run_review(paper_text)
     sys_issues = []
     for dim, key in DIMENSIONS:
         for item in _extract_defects(state.get(key) or ""):
@@ -180,7 +177,7 @@ def llm_align(human_weaknesses: list, sys_issues: list) -> list:
     sys_list = "\n".join(f"[S{i}] {t}" for i, t in enumerate(sys_issues))
     prompt = f"""你是学术论文审稿意见对齐专家。下面有两组审稿意见：
 A组是真人审稿人提出的论文缺陷意见（H开头），B组是AI审稿系统提出的缺陷意见（S开头）。
-请判断：B组中每条意见是否与A组中某条意见"说的是同一个问题"（语义等价，如"创新点不足"与"缺乏新颖性"算同一问题）。
+请判断：B组中每条意见是否与A组中某条意见"说的是同一个具体问题"（语义等价，如"创新点不足"与"缺乏新颖性"算同一问题；但"基线选择太少"与"消融实验缺失"是不同问题）。
 
 【A组·真人审稿意见】
 {human_list}
@@ -191,8 +188,8 @@ A组是真人审稿人提出的论文缺陷意见（H开头），B组是AI审稿
 请输出JSON格式的匹配对列表，格式如：
 {{"matches": [{{"human": 0, "system": 1}}, ...]}}
 匹配规则：
-- 每条B组意见最多匹配一条A组意见；每条A组意见可被多条B组匹配
-- 只输出语义等价的匹配，不要强行匹配
+- 只匹配"明确是同一个问题"的意见，语义相近但侧重不同的不算匹配
+- 每条A组意见最多被匹配一次；每条B组意见最多匹配一条A组意见（一对一）
 - 如果某条B组意见在A组中找不到等价问题，就不列入matches
 - 只输出JSON，不要其他文字"""
 
@@ -214,8 +211,8 @@ A组是真人审稿人提出的论文缺陷意见（H开头），B组是AI审稿
 
 # ============ 4. 指标计算与评测 ============
 
-def evaluate_paper(p: dict, pdf_path: str) -> dict:
-    """对单篇论文跑完整对比评测"""
+def evaluate_paper(p: dict, pdf_path: str = None, paper_text: str = None) -> dict:
+    """对单篇论文跑完整对比评测（paper_text 直接给全文，否则解析 pdf_path）"""
     title = p["title"]
     print(f"\n{'='*60}")
     print(f"📄 {title[:60]}")
@@ -224,11 +221,11 @@ def evaluate_paper(p: dict, pdf_path: str) -> dict:
     # 真人意见（取所有review的weaknesses，拆成条目）
     human_weaknesses = []
     for rv in p.get("reviews", []):
-        w = rv.get("weaknesses", "")
-        # 拆成条目（按编号/换行/分号）
-        parts = re.split(r'\n+', w)
-        for part in parts:
-            part = re.sub(r'^\d+[\.、]\s*', '', part).strip()
+        w = rv.get("weaknesses") or ""
+        # 拆成条目（按换行/编号/句号）
+        for part in re.split(r'\n+', w):
+            part = re.sub(r'^\d+[\.、\)]\s*', '', part).strip()
+            part = re.sub(r'^[-•]\s*', '', part).strip()
             if len(part) >= 8:
                 human_weaknesses.append(part)
     print(f"👤 真人意见: {len(p.get('reviews', []))} 条review，提取缺陷意见 {len(human_weaknesses)} 条")
@@ -237,9 +234,12 @@ def evaluate_paper(p: dict, pdf_path: str) -> dict:
         return None
 
     # 系统审稿
+    if paper_text is None and pdf_path:
+        parsed = parse_paper_file(pdf_path)
+        paper_text = parsed["text"]
     print("🤖 系统审稿中（约2分钟）...")
     t0 = time.time()
-    sys_result = run_system_review(pdf_path)
+    sys_result = run_system_review(paper_text)
     sys_issues = sys_result["issues"]
     print(f"  系统缺陷意见 {len(sys_issues)} 条（耗时 {time.time()-t0:.0f}s）")
     if not sys_issues:
@@ -329,6 +329,97 @@ def run_all(venue: str = None) -> None:
             print(f"\n✅ 已保存: tests/openreview_data/openreview_evaluation.json")
 
 
+def run_local(n: int = 3, text_dir: str = None) -> None:
+    """
+    本地数据模式：从 tests/openreview_data/ 读取
+      papers.jsonl.gz + reviews.jsonl.gz + ICLR_2024.tar.gz（全文）
+    评测：真人weaknesses vs 系统缺陷意见 的语义重合度
+    """
+    import gzip
+    import glob as _glob
+    import tarfile
+
+    # 1. 读 reviews
+    reviews_by_paper = {}
+    for gz in _glob.glob(os.path.join(DATA_DIR, "reviews*.jsonl.gz")):
+        with gzip.open(gz, "rt", encoding="utf-8") as f:
+            for line in f:
+                r = json.loads(line)
+                reviews_by_paper.setdefault(r.get("paper_id"), []).append(r)
+    print(f"📥 审稿意见: {sum(len(v) for v in reviews_by_paper.values())} 条，覆盖 {len(reviews_by_paper)} 篇论文")
+
+    # 2. 读 papers
+    papers = []
+    for gz in _glob.glob(os.path.join(DATA_DIR, "papers*.jsonl.gz")):
+        with gzip.open(gz, "rt", encoding="utf-8") as f:
+            for line in f:
+                papers.append(json.loads(line))
+    print(f"📄 论文: {len(papers)} 篇")
+
+    # 3. 解压全文
+    fulltexts = {}
+    for tgz in _glob.glob(os.path.join(DATA_DIR, "ICLR_*.tar.gz")):
+        print(f"📚 解压全文包: {os.path.basename(tgz)}")
+        with tarfile.open(tgz, "r:gz") as tar:
+            for m in tar.getmembers():
+                if m.name.endswith(".txt") and m.isfile():
+                    try:
+                        fobj = tar.extractfile(m)
+                        fulltexts[os.path.splitext(os.path.basename(m.name))[0]] = fobj.read().decode("utf-8", errors="replace")
+                    except Exception:
+                        pass
+    print(f"✅ 全文可用: {len(fulltexts)} 篇")
+
+    # 4. 选评测论文：有全文 + 有≥2条review且weaknesses非空
+    candidates = []
+    for p in papers:
+        pid = p.get("paper_id")
+        if pid not in fulltexts or pid not in reviews_by_paper:
+            continue
+        revs = reviews_by_paper[pid]
+        if len(revs) < 2:
+            continue
+        if not any((r.get("weaknesses") or "").strip() for r in revs):
+            continue
+        candidates.append(p)
+    print(f"🎯 可评测论文: {len(candidates)} 篇")
+    if not candidates:
+        print("没有可评测论文，检查数据文件")
+        return
+
+    results = []
+    for i, p in enumerate(candidates[:n]):
+        pid = p["paper_id"]
+        paper = {
+            "title": p.get("title", ""),
+            "reviews": reviews_by_paper[pid],
+            "abstract": p.get("abstract", ""),
+        }
+        print(f"\n[{i+1}/{min(n, len(candidates))}] {paper['title'][:60]}...")
+        try:
+            res = evaluate_paper(paper, pdf_path=None, paper_text=fulltexts[pid])
+            if res:
+                results.append(res)
+        except Exception as e:
+            print(f"  [失败] {e}")
+
+    if results:
+        print(f"\n{'='*60}")
+        print("📈 OpenReview 对比评测汇总（系统 vs 真人审稿）")
+        print(f"{'='*60}")
+        avg_cov = sum(r["coverage"] for r in results) / len(results)
+        avg_prec = sum(r["precision"] for r in results) / len(results)
+        avg_f1 = sum(r["f1"] for r in results) / len(results)
+        print(f"有效论文 {len(results)} 篇 | 真人意见共 {sum(r['human_count'] for r in results)} 条 | 系统意见共 {sum(r['sys_count'] for r in results)} 条 | 匹配 {sum(r['match_count'] for r in results)} 对")
+        print(f"平均 Human Coverage（真人意见召回率）: {avg_cov*100:.0f}%")
+        print(f"平均 Sys Precision（系统意见精确率）:  {avg_prec*100:.0f}%")
+        print(f"平均 F1 综合重合度: {avg_f1*100:.0f}%")
+        report = {"n": len(results), "avg_coverage": avg_cov, "avg_precision": avg_prec, "avg_f1": avg_f1, "papers": results}
+        with open(os.path.join(DATA_DIR, "openreview_evaluation.json"), "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+        print(f"\n✅ 已保存: tests/openreview_data/openreview_evaluation.json")
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -340,6 +431,9 @@ def main():
         cache_papers(venue, limit)
     elif mode == "run":
         run_all()
+    elif mode == "run-local":
+        n = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+        run_local(n)
     else:
         print(__doc__)
 

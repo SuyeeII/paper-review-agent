@@ -20,3 +20,6 @@ venv/
 .DS_Store
 Thumbs.db
 审稿报告_*.md
+
+tests/openreview_data/*.gz
+tests/openreview_data/ICLR_*.tar.gz

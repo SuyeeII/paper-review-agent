@@ -1,0 +1,109 @@
+{
+  "n": 2,
+  "avg_coverage": 1.0,
+  "avg_precision": 0.775,
+  "avg_f1": 0.873015873015873,
+  "papers": [
+    {
+      "title": "InfoNet: Missing Information Retrieval in Multi-Stream Sensing Systems",
+      "human_count": 3,
+      "sys_count": 4,
+      "match_count": 3,
+      "coverage": 1.0,
+      "precision": 0.75,
+      "f1": 0.8571428571428571,
+      "human": [
+        "First of all, the early attention framework which performs the explicit estimation of the uncertainty of the data-streams was not compared to other alternative modules that could perform implicit uncertainty estimation of the data [A] and feature recovery (e.g. any GAN, VAE, diffusion generative model or even a simple discriminatively trained model using simple regression on the missing data-streams). - The authors completely omit to compare with even a single decent benchmark model in the tasks of degree of arrival estimation. There are hundreds of models that the authors could use to just show how their models compare against them, I will just cite some [B, C, D, E]. There is no way of knowing that this whole implicit uncertainty estimation and conditional interpolation would yield a higher performance over a simple baseline. The authors should explicitly describe how they applied the baseline models of the literature to this task and use widely known benchmark datasets to compare against. - The paper becomes almost unreadable with the extreme overuse of acronyms throughout the manuscript. The pages are more than enough to present everything without reducing the readability of the paper. I would be more than happy to increase my score if all the above weaknesses are addressed by the authors. [A] Ma, C., Li, Y. and Hernández-Lobato, J.M., 2019, May. Variational implicit processes. In International Conference on Machine Learning (pp. 4222-4233). PMLR. [B] Sharath Adavanne, Archontis Politis and Tuomas Virtanen, 'Direction of arrival estimation for multiple sound sources using convolutional recurrent neural network' at European Signal Processing Conference (EUSIPCO 2018) [C] Sharath Adavanne, Archontis Politis and Tuomas Virtanen, 'Multichannel sound event detection using 3D convolutional neural networks for learning inter-channel features' at International Joint Conference on Neural Networks (IJCNN 2018) [D] Serizel, R., Turpault, N., Shah, A. and Salamon, J., 2020, May. Sound event detection in synthetic domestic environments. In ICASSP 2020-2020 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) (pp. 86-90). IEEE. [E] Papageorgiou, G.K., Sellathurai, M. and Eldar, Y.C., 2021. Deep networks for direction-of-arrival estimation in low SNR. IEEE Transactions on Signal Processing, 69, pp.3714-3729.",
+        "Lack of stronger baselines. The proposed method is compared only to two simple baselines - retraining with missing streams and a basic time-domain recovery method. More recent approaches, such as those in [1] and [2], are not included in the comparison. 2. The model is only tested under limited data setting (<100 hours). It's unclear how the model performs in larger datasets, even though practical use cases often involve much more data (e.g., Audioset contains ~5k hours of multimodal signals) 3. The downstream model for sound event localization is quite basic. Its performance with more recent sound event localizers (e.g., [3][4]) is unclear. [1]. Ma et al., SMIL: Multimodal Learning with Severely Missing Modality, in AAAI 2021 [2]. Wang et al., Multi-modal Learning with Missing Modality via Shared-Specific Feature Modelling, in CVPR 2023 [3]. Shimada, et al., ACCDOA: Activity-coupled cartesian direction of arrival representation for sound event localization and detection, in ICASSP 2021 [4]. Cao et al., An improved event-independent network for polyphonic sound event localization and detection, in ICASSP 2021",
+        "The paper's experimental section adequately covers comparisons with baseline methods, but primarily takes SELDNet[1] from 2018 for its most recent comparison. This raises a question about whether the paper might have missed evaluating InfoNet against the latest developments in sound event localization and detection, which would provide a clearer picture of its relative performance to latest methodologies. - The current approach, which combines concepts from information theory and feature extraction methods similar to U-Net, may not sufficiently demonstrate originality due to its simplicity. Incorporating more unique or novel elements into the proposed method could help enhance its originality and distinguish it from existing approaches. - While the experiments performed within the paper align with its scope, the absence of experiments involving other commonly encountered modalities such as images, videos, and text restricts the demonstration of the method's general applicability. If experiments in these additional modalities could be included, the authors can showcase the versatility and effectiveness of their approach across a broader range of data types. [1] Adavanne, Sharath, et al. \"Sound event localization and detection of overlapping sources using convolutional recurrent neural networks.\" IEEE Journal of Selected Topics in Signal Processing 13.1 (2018): 34-48."
+      ],
+      "sys": [
+        {
+          "dim": "方法论",
+          "text": "论文第3节提出的深度条件插值器（DCI）模块，虽然使用了自编码器进行特征插值，但未说明具体的网络结构和训练过程，无法体现其有效性。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对InfoNet算法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节实验部分，只使用了两个数据集进行评估，缺乏对其他数据集的验证，结论的推广性有限。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节结果分析部分，对实验结果的解释不够深入，未能充分说明InfoNet算法的优势和局限性。"
+        }
+      ],
+      "pairs": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "title": "Visual Chain of Thought: Bridging Logical Gaps with Multimodal Infillings",
+      "human_count": 4,
+      "sys_count": 5,
+      "match_count": 4,
+      "coverage": 1.0,
+      "precision": 0.8,
+      "f1": 0.888888888888889,
+      "human": [
+        "There is a lack of ablation study on the proposed method, making it difficult to estimate the effectiveness of individual components. For instance, while the recursive generation seems to be an important step, the paper does not provide any quantitative/qualitative evaluation of how such a process is advantageous to its counterpart (e.g., iterative). Looking at Figure 7, the text generated by the proposed method does not appear to be very novel compared to the one for the baseline. - While it could be unfair to directly compare the proposed zero-shot method with supervised approaches, it would still be reasonable to conduct evaluation on the ground truth annotations. Otherwise, it is unclear whether or not the method truly formulates the intermediate logical procedure for problem-solving. - Despite the superiority of the proposed method reported in Table 1, it appears that there is no clear advantage when considering different approaches independently (i.e., Figure 6). - The paper only considers a simplified setting of chain-of-thought, where the goal is to generate a single intermediate step based on its two adjacent neighbors. On the other hand, for complicated problems, multiple logical steps are typically required to form the chain-of-thought. How would the proposed approach generalize to these scenarios? More importantly, it is also unclear whether or not it can address out-of-domain reasoning problems, considering its heavy reliance on a pretrained large language model for inferring the intermediate steps.",
+        "One of the paper’s major motivations for VCoT is that it provides a human-interpretable insight into the AI system’s reasoning ability. However it’s not clear in what way, and which particular model’s predictions are explained by the proposed, synthetically generated VCoT images. Some details of the approach are unclear from the paper. - E.g., in Eq. (2), the argmax is computed over CLIP similarity scores between the current predicted text t_i, and what other element? - The notation in the Equation series (1-5) is also confusing. g appears to be a generative model that predicts text t_i in Eq. (1), and image v_i in Eq. (3). However, an argmax is computed over g(.) in Eq. (4), as if it were a score function. - What exactly is the scoring function, using which is v_i^{best} chosen in Eq. (4) ? - It appears that the Equations being referenced in the text of Sec. 3 and Sec. 4.2 might be incorrect. Unfortunately, the current version of Fig. 2 doesn’t clarify things either. The different blocks in the current color-scheme appear too similar to each other, and distinguishing between them is difficult for this reader. During task unification (of text-only WikiHow data), individual images are generated given individual text instructions. A number of candidate images for the time-step i are generated, and CLIP embedding similarity between the images and the corresponding text t_i is computed. The most relevant image is chosen. While this provides a sequence of images, there is no constraint that the images themselves, are “coherent” (related to each other). This could result in a sequence of different, apparently unrelated images despite the text being coherent and related to the corresponding images. It would be good if it were possible to scale the evaluation to a larger dataset. Currently, evaluation is only based on human feedback. However, this approach only scales at a significant cost. If the authors present an automated method ot evaluate the different aspects of the model, that might be a good contribution that makes the paper stronger. The overall approach is rather involved, with multiple blocks / processes that generate the final result. However, the influence of the individual blocks, e.g., “multi-point foveation”, “task unification” (+ captioning), etc., are not evaluated or discussed in detail. Minor comments: - Fig. 3 (left) typo -- (v_i’’, t_i’’) --> (v_i', t_i')? - The colors of the different blocks in the architecture diagram in Fig. 2 are too similar to each other.",
+        "Lack of verification on downstream tasks. Although the authors mention a lot about downstream evaluation in the paper, it mainly focuses on directly evaluating the quality of the generated image/text in the downstream dataset.s However, a more important dimension, IMO, is whether the infilled image/caption is useful for downstream tasks. For example, when adding the generated data as additional training data for visual storytelling and wiki-how, if the performance of the SOTA model (retrieval/generation) can be further boosted or not? 2. About the recursive approach to generate the infillings. It's claimed in the paper a lot of advantages of `recursive approach` vs `iterative approach` about dynamics, such as `A recursive approach makes it easier to dynamically determine when infillings are not beneficial to the task and when to stop generating them in contrast to an iterative approach`. However, in Sec. 4.4, the authors admit that a fixed depth is the best in practice, which eliminates the advantages claimed before, especially about dynamically determining/stopping. 3. I don't quite get why the recursive approach is called `novelty-driven`. To me, there is nothing emphasizing adding additional novel content in the recursive algorithm. 4. There are many hyperparameters in the paper, such as the number of text candidates, number of image candidates, number of few-shot examples. However, no ablation experiments are conducted to validate them. 5. No ablation on the effectiveness of core components of the method, eg, multipoint foveation, novelty/consistency-driven infilling. 6. How are the generated multimodal infillings compared with ground-truth quality? It's the upper-bound of this task and should be evaluated too.",
+        "(W1) The generated multimodal infillings show marginal improvements compared with the simple baselines (Chain-of-Thought and Chain-of-Images). As can be seen in Table 2, VCoT has a roughly 30% chance of winning on average. It indicates that the proposed method does not dominate the baselines in downstream tasks (i.e., WikiHow and Visual Storytelling). Even worse, the gap between VCoT and the method that does not use any infillings (No Infilling) also seems marginal, although VCoT leverages several strong pre-trained models (e.g., GPT-3.5, CLIP, StableDiffusion, and OFA) with massive computation. (W2) The paper mainly focused on checking the quality of the generated multimodal infillings. It would be great if the paper presented the impact of VCoT in existing evaluation protocols at VIST and WikiHow tasks. (W3) There are several components in VCoT, but the paper does not present any ablation studies. So, I can’t check the individual contribution of the proposed components. For example, - VCoT generates multipoint foveation (MPF) only with text (i.e., w/o image captions) - VCoT generates multimodal infillings without MPF (i.e., w/o MPF) - VCoT generates a single multimodal infilling, not multiple (i.e., five) candidates (i.e., w/o consistency-driven selector) (W4) There are too many typos and inconsistent notations in the manuscript as below. I request the authors to review the entire paper thoroughly. - In Section 3, the main text describes that the judgment function j takes vision and language data, but the function takes the text in Eq. 2. - In Section 3, textual references of Equation 3 and 4 should be Equation 5 and 6, respectively. - In Equation 6, “Eq. 6 holds” should be “Eq. 5 holds” - In Section 4, textual references of Equation 5 should be Equation 7."
+      ],
+      "sys": [
+        {
+          "dim": "方法论",
+          "text": "论文第5节中的人体评估部分，虽然使用了人类评估，但评估指标较为单一，缺乏对VCOT方法性能的全面评估。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对VCOT方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节中提到的“新颖性和一致性驱动的递归填充”缺乏具体的算法描述，读者难以理解其具体实现方式。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节中的人体评估部分，虽然使用了人类评估，但评估指标较为单一，缺乏对VCOT方法在不同任务上的综合评估。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文第5节结论部分未明确指出VCOT方法的局限性，也未提出未来研究方向（第6节第1段）。"
+        }
+      ],
+      "pairs": [
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          4
+        ]
+      ]
+    }
+  ]
+}
