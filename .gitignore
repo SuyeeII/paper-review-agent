@@ -23,3 +23,6 @@ Thumbs.db
 
 tests/openreview_data/*.gz
 tests/openreview_data/ICLR_*.tar.gz
+
+tests/*.log
+tests/openreview_data/sys_reviews_cache.json

@@ -162,6 +162,23 @@ def run_system_review(paper_text: str) -> dict:
     return {"issues": sys_issues, "state": state, "text": paper_text}
 
 
+# 系统审稿缓存：同一篇论文只审一次，重跑对齐时复用
+_SYS_CACHE_PATH = os.path.join(DATA_DIR, "sys_reviews_cache.json")
+
+def _load_sys_cache() -> dict:
+    if os.path.exists(_SYS_CACHE_PATH):
+        try:
+            with open(_SYS_CACHE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_sys_cache(cache: dict) -> None:
+    with open(_SYS_CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False)
+
+
 # ============ 3. LLM 语义对齐 ============
 
 def llm_align(human_weaknesses: list, sys_issues: list) -> list:
@@ -177,7 +194,6 @@ def llm_align(human_weaknesses: list, sys_issues: list) -> list:
     sys_list = "\n".join(f"[S{i}] {t}" for i, t in enumerate(sys_issues))
     prompt = f"""你是学术论文审稿意见对齐专家。下面有两组审稿意见：
 A组是真人审稿人提出的论文缺陷意见（H开头），B组是AI审稿系统提出的缺陷意见（S开头）。
-请判断：B组中每条意见是否与A组中某条意见"说的是同一个具体问题"（语义等价，如"创新点不足"与"缺乏新颖性"算同一问题；但"基线选择太少"与"消融实验缺失"是不同问题）。
 
 【A组·真人审稿意见】
 {human_list}
@@ -185,24 +201,29 @@ A组是真人审稿人提出的论文缺陷意见（H开头），B组是AI审稿
 【B组·AI系统意见】
 {sys_list}
 
-请输出JSON格式的匹配对列表，格式如：
-{{"matches": [{{"human": 0, "system": 1}}, ...]}}
-匹配规则：
-- 只匹配"明确是同一个问题"的意见，语义相近但侧重不同的不算匹配
-- 每条A组意见最多被匹配一次；每条B组意见最多匹配一条A组意见（一对一）
-- 如果某条B组意见在A组中找不到等价问题，就不列入matches
-- 只输出JSON，不要其他文字"""
+对B组中的【每一条】意见，判断它在A组中是否有"明确是同一个问题"的意见（语义等价，如"创新点不足"与"缺乏新颖性"算同一问题；但"基线选择太少"与"消融实验缺失"是不同问题）。
+- 一条B组意见可以匹配0条或多条A组意见（当A组中一条长意见包含多个子问题时，可匹配多条）
+- 只匹配"明确是同一个问题"的意见，语义相近但侧重不同的不算
+- 如果某条B组意见在A组中找不到等价问题，给出空列表
 
-    result = llm.chat(prompt, system_prompt="你是一个严谨的审稿意见对齐工具，只输出JSON。", temperature=0.1, max_tokens=1000, seed=42)
+请输出JSON格式，如：
+{{"matches": [{{"system": 0, "human": [1, 3]}}, {{"system": 1, "human": []}}, ...]}}
+每条B组意见都要有对应的条目。只输出JSON，不要其他文字"""
+
+    result = llm.chat(prompt, system_prompt="你是一个严谨的审稿意见对齐工具，只输出JSON。", temperature=0.1, max_tokens=1500, seed=42)
     try:
         # 提取JSON部分
         m = re.search(r'\{.*\}', result, re.DOTALL)
         data = json.loads(m.group(0)) if m else {}
         pairs = []
         for match in data.get("matches", []):
-            h, s = match.get("human"), match.get("system")
-            if isinstance(h, int) and isinstance(s, int) and 0 <= h < len(human_weaknesses) and 0 <= s < len(sys_issues):
-                pairs.append((h, s))
+            s = match.get("system")
+            h_list = match.get("human") or []
+            if not isinstance(s, int) or not 0 <= s < len(sys_issues):
+                continue
+            for h in h_list:
+                if isinstance(h, int) and 0 <= h < len(human_weaknesses):
+                    pairs.append((h, s))
         return pairs
     except Exception as e:
         print(f"  [对齐失败] {e}: {result[:100]}")
@@ -218,30 +239,39 @@ def evaluate_paper(p: dict, pdf_path: str = None, paper_text: str = None) -> dic
     print(f"📄 {title[:60]}")
     print(f"{'='*60}")
 
-    # 真人意见（取所有review的weaknesses，拆成条目）
+    # 真人意见（取所有review的weaknesses，精细拆条：W1./编号/(1)/换行/分号）
     human_weaknesses = []
     for rv in p.get("reviews", []):
         w = rv.get("weaknesses") or ""
-        # 拆成条目（按换行/编号/句号）
-        for part in re.split(r'\n+', w):
-            part = re.sub(r'^\d+[\.、\)]\s*', '', part).strip()
-            part = re.sub(r'^[-•]\s*', '', part).strip()
-            if len(part) >= 8:
-                human_weaknesses.append(part)
+        parts = re.split(r'(?=\n\s*(?:W\d+[\.\:\)]|\(\d+\)|\d+[\.\)]|[-•]\s))|\n{2,}', w)
+        for part in parts:
+            part = re.sub(r'^(?:W\d+[\.\:\)]\s*|\(\d+\)\s*|\d+[\.\)]\s*|[-•]\s*)', '', part).strip()
+            for sub in re.split(r';\s+', part):
+                sub = sub.strip()
+                if len(sub) >= 12:
+                    human_weaknesses.append(sub)
     print(f"👤 真人意见: {len(p.get('reviews', []))} 条review，提取缺陷意见 {len(human_weaknesses)} 条")
     if not human_weaknesses:
         print("  ⚠️ 无真人缺陷意见，跳过")
         return None
 
-    # 系统审稿
+    # 系统审稿（带缓存：同一篇只审一次）
     if paper_text is None and pdf_path:
         parsed = parse_paper_file(pdf_path)
         paper_text = parsed["text"]
-    print("🤖 系统审稿中（约2分钟）...")
-    t0 = time.time()
-    sys_result = run_system_review(paper_text)
-    sys_issues = sys_result["issues"]
-    print(f"  系统缺陷意见 {len(sys_issues)} 条（耗时 {time.time()-t0:.0f}s）")
+    cache = _load_sys_cache()
+    paper_key = p.get("paper_id") or title[:30]
+    if paper_key in cache and cache[paper_key].get("issues"):
+        sys_issues = cache[paper_key]["issues"]
+        print(f"  系统意见 {len(sys_issues)} 条（命中缓存）")
+    else:
+        print("🤖 系统审稿中（约2分钟）...")
+        t0 = time.time()
+        sys_result = run_system_review(paper_text)
+        sys_issues = sys_result["issues"]
+        print(f"  系统缺陷意见 {len(sys_issues)} 条（耗时 {time.time()-t0:.0f}s）")
+        cache[paper_key] = {"issues": sys_issues, "title": title}
+        _save_sys_cache(cache)
     if not sys_issues:
         print("  ⚠️ 系统无缺陷意见，跳过")
         return None
@@ -383,26 +413,59 @@ def run_local(n: int = 3, text_dir: str = None) -> None:
             continue
         candidates.append(p)
     print(f"🎯 可评测论文: {len(candidates)} 篇")
-    if not candidates:
-        print("没有可评测论文，检查数据文件")
-        return
+
+    # 按真人评分分层随机抽样（评分分布：1=拒稿 ~ 10=强录用）
+    import random
+    random.seed(42)
+    scored = []
+    for p in candidates:
+        revs = reviews_by_paper[p["paper_id"]]
+        scores = [r.get("actual_score") for r in revs if isinstance(r.get("actual_score"), (int, float))]
+        if scores:
+            scored.append((sum(scores) / len(scores), p))
+    if len(scored) > n:
+        # 分层：低分(1-3)/中(4-7)/高(8-10) 各取 1/3
+        buckets = {"low": [], "mid": [], "high": []}
+        for avg_s, p in scored:
+            if avg_s <= 3:
+                buckets["low"].append((avg_s, p))
+            elif avg_s <= 7:
+                buckets["mid"].append((avg_s, p))
+            else:
+                buckets["high"].append((avg_s, p))
+        picked = []
+        per = max(1, n // 3)
+        for b in ["low", "mid", "high"]:
+            random.shuffle(buckets[b])
+            picked.extend(buckets[b][:per])
+        if len(picked) < n:
+            rest = [x for x in scored if x not in picked]
+            random.shuffle(rest)
+            picked.extend(rest[: n - len(picked)])
+    else:
+        picked = scored
+    picked.sort(key=lambda x: -x[0])
+    print(f"🔀 分层抽样 {len(picked)} 篇（真人评分分布: " +
+          " ".join(f"{s:.1f}" for s, _ in picked) + "）\n")
 
     results = []
-    for i, p in enumerate(candidates[:n]):
+    for i, (_, p) in enumerate(picked):
         pid = p["paper_id"]
         paper = {
+            "paper_id": pid,
             "title": p.get("title", ""),
             "reviews": reviews_by_paper[pid],
             "abstract": p.get("abstract", ""),
         }
-        print(f"\n[{i+1}/{min(n, len(candidates))}] {paper['title'][:60]}...")
+        print(f"[{i+1}/{len(picked)}] {paper['title'][:60]}...")
         try:
             res = evaluate_paper(paper, pdf_path=None, paper_text=fulltexts[pid])
             if res:
                 results.append(res)
         except Exception as e:
             print(f"  [失败] {e}")
-
+        # 每篇评测完立即保存中间结果，防止中断丢失
+        _save_report(results)
     if results:
         print(f"\n{'='*60}")
         print("📈 OpenReview 对比评测汇总（系统 vs 真人审稿）")
@@ -414,10 +477,20 @@ def run_local(n: int = 3, text_dir: str = None) -> None:
         print(f"平均 Human Coverage（真人意见召回率）: {avg_cov*100:.0f}%")
         print(f"平均 Sys Precision（系统意见精确率）:  {avg_prec*100:.0f}%")
         print(f"平均 F1 综合重合度: {avg_f1*100:.0f}%")
-        report = {"n": len(results), "avg_coverage": avg_cov, "avg_precision": avg_prec, "avg_f1": avg_f1, "papers": results}
-        with open(os.path.join(DATA_DIR, "openreview_evaluation.json"), "w", encoding="utf-8") as f:
-            json.dump(report, f, ensure_ascii=False, indent=2)
+        _save_report(results)
         print(f"\n✅ 已保存: tests/openreview_data/openreview_evaluation.json")
+
+
+def _save_report(results: list) -> None:
+    """保存评测报告（每篇完成后调用，防止中断丢失）"""
+    if not results:
+        return
+    avg_cov = sum(r["coverage"] for r in results) / len(results)
+    avg_prec = sum(r["precision"] for r in results) / len(results)
+    avg_f1 = sum(r["f1"] for r in results) / len(results)
+    report = {"n": len(results), "avg_coverage": avg_cov, "avg_precision": avg_prec, "avg_f1": avg_f1, "papers": results}
+    with open(os.path.join(DATA_DIR, "openreview_evaluation.json"), "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
 
 
 def main():

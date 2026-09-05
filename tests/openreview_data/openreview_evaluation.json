@@ -1,38 +1,225 @@
 {
-  "n": 2,
-  "avg_coverage": 1.0,
-  "avg_precision": 0.775,
-  "avg_f1": 0.873015873015873,
+  "n": 10,
+  "avg_coverage": 0.6366666666666666,
+  "avg_precision": 0.6318831168831169,
+  "avg_f1": 0.6115707821590174,
   "papers": [
     {
-      "title": "InfoNet: Missing Information Retrieval in Multi-Stream Sensing Systems",
+      "title": "Unlocking the Power of Representations in Long-term Novelty-based Exploration",
       "human_count": 3,
-      "sys_count": 4,
-      "match_count": 3,
-      "coverage": 1.0,
-      "precision": 0.75,
-      "f1": 0.8571428571428571,
+      "sys_count": 11,
+      "match_count": 5,
+      "coverage": 0.3333333333333333,
+      "precision": 0.45454545454545453,
+      "f1": 0.3846153846153846,
       "human": [
-        "First of all, the early attention framework which performs the explicit estimation of the uncertainty of the data-streams was not compared to other alternative modules that could perform implicit uncertainty estimation of the data [A] and feature recovery (e.g. any GAN, VAE, diffusion generative model or even a simple discriminatively trained model using simple regression on the missing data-streams). - The authors completely omit to compare with even a single decent benchmark model in the tasks of degree of arrival estimation. There are hundreds of models that the authors could use to just show how their models compare against them, I will just cite some [B, C, D, E]. There is no way of knowing that this whole implicit uncertainty estimation and conditional interpolation would yield a higher performance over a simple baseline. The authors should explicitly describe how they applied the baseline models of the literature to this task and use widely known benchmark datasets to compare against. - The paper becomes almost unreadable with the extreme overuse of acronyms throughout the manuscript. The pages are more than enough to present everything without reducing the readability of the paper. I would be more than happy to increase my score if all the above weaknesses are addressed by the authors. [A] Ma, C., Li, Y. and Hernández-Lobato, J.M., 2019, May. Variational implicit processes. In International Conference on Machine Learning (pp. 4222-4233). PMLR. [B] Sharath Adavanne, Archontis Politis and Tuomas Virtanen, 'Direction of arrival estimation for multiple sound sources using convolutional recurrent neural network' at European Signal Processing Conference (EUSIPCO 2018) [C] Sharath Adavanne, Archontis Politis and Tuomas Virtanen, 'Multichannel sound event detection using 3D convolutional neural networks for learning inter-channel features' at International Joint Conference on Neural Networks (IJCNN 2018) [D] Serizel, R., Turpault, N., Shah, A. and Salamon, J., 2020, May. Sound event detection in synthetic domestic environments. In ICASSP 2020-2020 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) (pp. 86-90). IEEE. [E] Papageorgiou, G.K., Sellathurai, M. and Eldar, Y.C., 2021. Deep networks for direction-of-arrival estimation in low SNR. IEEE Transactions on Signal Processing, 69, pp.3714-3729.",
-        "Lack of stronger baselines. The proposed method is compared only to two simple baselines - retraining with missing streams and a basic time-domain recovery method. More recent approaches, such as those in [1] and [2], are not included in the comparison. 2. The model is only tested under limited data setting (<100 hours). It's unclear how the model performs in larger datasets, even though practical use cases often involve much more data (e.g., Audioset contains ~5k hours of multimodal signals) 3. The downstream model for sound event localization is quite basic. Its performance with more recent sound event localizers (e.g., [3][4]) is unclear. [1]. Ma et al., SMIL: Multimodal Learning with Severely Missing Modality, in AAAI 2021 [2]. Wang et al., Multi-modal Learning with Missing Modality via Shared-Specific Feature Modelling, in CVPR 2023 [3]. Shimada, et al., ACCDOA: Activity-coupled cartesian direction of arrival representation for sound event localization and detection, in ICASSP 2021 [4]. Cao et al., An improved event-independent network for polyphonic sound event localization and detection, in ICASSP 2021",
-        "The paper's experimental section adequately covers comparisons with baseline methods, but primarily takes SELDNet[1] from 2018 for its most recent comparison. This raises a question about whether the paper might have missed evaluating InfoNet against the latest developments in sound event localization and detection, which would provide a clearer picture of its relative performance to latest methodologies. - The current approach, which combines concepts from information theory and feature extraction methods similar to U-Net, may not sufficiently demonstrate originality due to its simplicity. Incorporating more unique or novel elements into the proposed method could help enhance its originality and distinguish it from existing approaches. - While the experiments performed within the paper align with its scope, the absence of experiments involving other commonly encountered modalities such as images, videos, and text restricts the demonstration of the method's general applicability. If experiments in these additional modalities could be included, the authors can showcase the versatility and effectiveness of their approach across a broader range of data types. [1] Adavanne, Sharath, et al. \"Sound event localization and detection of overlapping sources using convolutional recurrent neural networks.\" IEEE Journal of Selected Topics in Signal Processing 13.1 (2018): 34-48."
+        "**W1.** A crucial weakness is that the proposed approach introduces additional complexity in memory management compared to NGU, which had a more straightforward episodic reset for memory. Here, there are hyperparameters for atoms of memory size, a discounting of counts and additional heuristics to update/add/remove atoms of memory. Some of the additional complexity and increase in hyperparameters might make it hard to apply this approach to new environments. **W2.** Further ablations are needed to clarify certain issues. Is CASM only beneficial over one-step action prediction (AP) when there is high aliasing due to partial observability (like DM-HARD-8)? Are results for MEME-RECODE/NGU-CASM available for the Atari environments? I may have missed them in the appendix. In Appendix L, results are presented for RND on AP (one-step action prediction), where a random net is applied to features extracted by AP. As the random network is typically seen as a feature extractor itself, wouldn’t it be more natural to obtain RND-like intrinsic rewards from a predictor of the AP feature of a state (rather than a random embedding of the AP embedding)? Similarly, it would be helpful to evaluate if RECODE is better than NGU when NGU uses RND on AP (or an RND-like bonus with AP features directly) for its global bonus. **W3.** The paper would benefit from connections to existing work. For instance, the recently proposed MIMEx [1] also uses masked transformers to derive trajectory level intrinsic rewards. Previous works have studied incorporating information over longer trajectories to derive better intrinsic rewards under partial observability, [4] uses general value functions based on RND, other approaches use successor features which naturally incorporate multi-step information [2,3]. **W4.** In the abstract and the conclusion, the authors claim that the proposed approach sets a new state-of-the-art on Atari’s hard exploration dataset and DM-HARD-8. While this claim is reasonable for DM-HARD-8, I am not sure it applies to the Atari experiments, as RECODE appears to be worse than NGU in hero and venture. I remain open to increasing my score, should the weaknesses and questions be adequately addressed/clarified. —------------------—------------------—------------------—------------------—------------------ ### References [1] Lin, T., & Jabri, A. (2023). MIMEx: Intrinsic Rewards from Masked Input Modeling. arXiv preprint arXiv:2305.08932 [2] Machado, M. C., Bellemare, M. G., & Bowling, M. (2020). Count-based exploration with the successor representation. In Proceedings of the AAAI Conference on Artificial Intelligence [3] Janz, D., Hron, J., Mazur, P., Hofmann, K., Hernández-Lobato, J. M., & Tschiatschek, S. (2019). Successor uncertainties: exploration and uncertainty in temporal difference learning. Advances in Neural Information Processing Systems [4] Ramesh, A., Kirsch, L., van Steenkiste, S., & Schmidhuber, J. (2022). Exploring through random curiosity with general value functions. Advances in Neural Information Processing Systems ------------------------------------------------------------------------------------------------------ **EDIT (Post-rebuttal):** Thanks for your detailed response to the weaknesses and for sharing your thoughts regarding resets in different procedurally generated environments. The response largely addresses my concerns, and I have updated my score accordingly. The promised experiments/ablations and clarification about RND-on-AP alleviate my concerns about W2. Incorporating the comments shared in the reply to W3 would help better contextualize the contributions of RECODE. Modifying the wording and including the details shared here will avoid misinterpreting claims (W4). Coming back to W1, your response helps me better understand the \"complexity\" trade-off with respect to NGU. I appreciate the point regarding long episodes. Removing RND is a significant plus, especially if it is hard to tune. The new sensitivity analysis in the appendix supports the paper (it would be nice to see more values considered in the next version). *Ideally*, this claim should also be backed through sensitivity analysis with NGU/RND. A minor note I missed in the original review is a slight inconsistency between the Background and General Notation sections. For example, policies map observations to distribution over actions in Background, but in General Notation, the policy operates on histories. Another minor issue is that the caption of Figure 6 uses top/bottom instead of left/right.",
+        "The rationale behind using RECODE as opposed to NGU is simplicity: RECODE uses one singular mechanism, while NGU uses two. However, it is not apparent to me that overall RECODE is simpler in terms of hyperparameter count / design space. Is there a rationale behind the optimal choice of hyperparmaters? In addition, the experiment figures do not seem to support an overwhelming positive conclusion in favor of RECODE, besides for the headline successes on “Pitfall!” and DM-HARD-8.",
+        "The presented algorithm demonstrates impressive performance in well-established hard-exploration benchmarks. However, it lacks evaluation in an open-ended (yet equally challenging in terms of exploration) environment, such as Minecraft, which would combine the complexities of long-horizon tasks from Atari with rich observations from environments like DM-Hard-8, as utilized in the paper. While the authors assert the robustness of the presented algorithm to different RL algorithms for policy learning, the RL training solely relies on MEME, a powerful RL algorithm with substantial learning capacity. While this choice appears suitable, the paper lacks an analysis showcasing the performance of more commonly used algorithms like PPO or DQN when coupled with RECODE. Including such comparative results would significantly support the paper's claims regarding RECODE's versatility in enhancing long-horizon exploration across various RL algorithms. VMPO is also used for the DM-Hard-8 suite, but I believe this doesn't provide evidence that RECODE would still work well with more popular RL algorithms."
+      ],
+      "sys": [
+        {
+          "dim": "创新性",
+          "text": "论文存在由于相关工作对比不足的问题，需要针对性完善。"
+        },
+        {
+          "dim": "创新性",
+          "text": "论文存在方法描述过于简略的问题，需要针对性完善。"
+        },
+        {
+          "dim": "创新性",
+          "text": "论文存在导致论文创新性不足的问题，需要针对性完善。"
+        },
+        {
+          "dim": "创新性",
+          "text": "论文存在技术贡献有限的问题，需要针对性完善。"
+        },
+        {
+          "dim": "创新性",
+          "text": "论文存在因此给出6/10的评分的问题，需要针对性完善。"
+        },
+        {
+          "dim": "方法论",
+          "text": "论文第4节提出的CASM方法虽然对表示学习进行了改进，但其原理和实现细节描述不够详细，缺乏对CASM方法的理论分析和实验验证。"
+        },
+        {
+          "dim": "方法论",
+          "text": "论文第5节虽然展示了RECODE在Atari和DM-HARD-8环境中的性能，但缺乏对RECODE在不同类型环境中的泛化能力分析。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对RECODE方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节提出的CASM方法描述较为简略，未详细说明其如何利用掩码变换器架构进行多步预测，以及如何与RECODE结合（见论文第4节）。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节中，实验结果的描述主要集中在平均得分上，缺乏对实验结果的具体分析，如不同场景下的性能差异、不同参数设置的影响等（见论文第5节）。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文第4节对CASM方法的描述较为简略，未详细说明其如何通过掩码变换器架构进行多步预测，导致读者难以理解其具体实现方式。"
+        }
+      ],
+      "pairs": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          6
+        ]
+      ]
+    },
+    {
+      "title": "Simplifying Transformer Blocks",
+      "human_count": 1,
+      "sys_count": 5,
+      "match_count": 2,
+      "coverage": 1.0,
+      "precision": 0.4,
+      "f1": 0.5714285714285715,
+      "human": [
+        "One weakness is that the results are limited to smaller models of size ~100M. It is not clear if the results would scale to bigger models. - Moreover, the authors only consider GLUE benchmark for downstream evaluation. It would be nice to include a more comprehensive evaluation across different task categories like classification, generation or reasoning."
       ],
       "sys": [
         {
           "dim": "方法论",
-          "text": "论文第3节提出的深度条件插值器（DCI）模块，虽然使用了自编码器进行特征插值，但未说明具体的网络结构和训练过程，无法体现其有效性。"
+          "text": "论文对简化Transformer块的方法局限性讨论不足，例如，论文未明确说明该方法在处理长序列数据时的性能表现，也未讨论该方法在不同任务上的适用性。"
         },
         {
           "dim": "论证与证据",
-          "text": "论文第3节对InfoNet算法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+          "text": "论文第3节对简化方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
         },
         {
           "dim": "论证与证据",
-          "text": "论文第4节实验部分，只使用了两个数据集进行评估，缺乏对其他数据集的验证，结论的推广性有限。"
+          "text": "论文第4节实验结果分析不够深入，仅简单比较了不同方法的训练速度和参数数量，未对性能差异进行深入分析。"
         },
         {
           "dim": "论证与证据",
-          "text": "论文第5节结果分析部分，对实验结果的解释不够深入，未能充分说明InfoNet算法的优势和局限性。"
+          "text": "论文第5节讨论部分对简化方法的局限性讨论不足，未充分讨论其在更大规模模型和更复杂任务上的适用性。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文第5节中，对于简化Transformer块在不同深度和不同任务上的性能分析不够全面，缺乏与其他简化方法的对比。"
+        }
+      ],
+      "pairs": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          3
+        ]
+      ]
+    },
+    {
+      "title": "Class Probability Matching with Calibrated Networks for Label Shift Adaption",
+      "human_count": 5,
+      "sys_count": 2,
+      "match_count": 1,
+      "coverage": 0.2,
+      "precision": 0.5,
+      "f1": 0.28571428571428575,
+      "human": [
+        "The authors emphasize that the proposed algorithm has made significant improvements in terms of computational efficiency, reducing the computational complexity from O(n_p^3) to O(n_qK^2) . However, no related experimental evidence has been provided to support this claim",
+        "2. While this paper is the first to estimate marginal probability ratios from a class probabilistic perspective, such methods have already been explored extensively in the long-tailed domain, especially in approaches like logit adjustment, as seen in prior works such as the one in [1]. I believe it is essential for the authors to conduct some research and comparisons in this regard",
+        "3. Previous studies [2] have already demonstrated that calibration can indeed enhance performance, so the calibrated network mentioned in the paper is not very novel. [1] Generalized Logit Adjustment: Calibrating Fine-tuned Models by Removing Label Bias in Foundation Models. // Main Track, Conference on Neural Information Processing Systems. NeurIPS 2023. [2] Alexandari A, Kundaje A, Shrikumar A. Maximum likelihood with bias-corrected calibration is hard-to-beat at label shift adaptation[C]//International Conference on Machine Learning. PMLR, 2020: 222-232.",
+        "While I vote for clear acceptance, I think the studied problem is not very significant since they simply consider the label shift problem. Notably, this problem can be regarded as an imbalanced semi-supervised learning problem where the labeled set and the unlabeled set have different classes prior. There have been many empirically strong works that study the imbalanced semi-supervised learning problem [1-4] and I suggest the authors discuss these papers properly. 2. Can the proposed method be equipped with existing imbalanced semi-supervised learning algorithms for improved performance? It won't affect my decision, but I would appreciate it if the authors could provide further extensions, which I believe will enhance the empirical significance of this paper. 3. In Eq (11), the authors directly optimize the class prob ratio by searching the $R^K$ space and finally perform normalization. Can we directly obtain the class prob ratio by constraining it in the normalized space $\\sum \\hat{w}_k = 1$? 4. There are some typos, e.g. there is an unexpected bracket on page 13 line 4, 'p(k))'. [1] Kim J, Hur Y, Park S, et al. Distribution aligning refinery of pseudo-label for imbalanced semi-supervised learning[J]. Advances in neural information processing systems, 2020, 33: 14567-14579. [2] Oh Y, Kim D J, Kweon I S. Daso: Distribution-aware semantics-oriented pseudo-label for imbalanced semi-supervised learning[C]//Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. 2022: 9786-9796. [3] Wei C, Sohn K, Mellina C, et al. Crest: A class-rebalancing self-training framework for imbalanced semi-supervised learning[C]//Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2021: 10857-10866. [4] Fan Y, Dai D, Kukleva A, et al. Cossl: Co-learning of representation and classifier for imbalanced semi-supervised learning[C]//Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. 2022: 14574-14584.",
+        "While the computational complexity is considered as one of the main advantages of the method, the paper is missing some experimental studies on the runtime. At what point (target domain size) the method becomes computationally prohibitive? How does that compare empirically with the other methods? 2. A minor comment on writing: introducing “Calibrated networks” as a part of the method might suggest that there is some novelty in designing a proper mechanism of calibration for the label shift scenario. In fact, calibrated networks are used off the shelf as a necessary ingredient of the method to improve the estimation of p(y|x)."
+      ],
+      "sys": [
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节中，CPMCN算法的实验结果分析不够深入，仅简单比较了不同方法的性能，未对性能差异进行深入的原因分析。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文第4节在描述CPMCN算法时，部分步骤的描述不够清晰，例如在计算概率比时，未明确说明如何处理分母接近零的情况。"
+        }
+      ],
+      "pairs": [
+        [
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "title": "MotionDirector: Motion Customization of Text-to-Video Diffusion Models",
+      "human_count": 3,
+      "sys_count": 4,
+      "match_count": 1,
+      "coverage": 0.3333333333333333,
+      "precision": 0.25,
+      "f1": 0.28571428571428575,
+      "human": [
+        "I personally do not see a necessity that especially formulates the task of motion customization. It is a subset of video editing tasks. Meanwhile, the motion pattern is not generated from scratch nor adjustable. 2. There is no discussion of failure cases, which can provide important insights for the video editing field.",
+        "In this paper, the LoRA technique is used to decouple the learning of appearance and dynamics in reference videos. Does this method require separate training for each specific set of videos for a particular motion to generate videos? How does the video quality fare beyond the distribution? 2. The authors have designed two branches for learning the appearances and dynamics of videos. In the temporal branch, the authors have included spatial LoRA and share parameters with the spatial branch. Does such inclusion of spatial LoRA in the temporal path interferes with learning temporal information? 3. In Figure 4, video 1 & video 2, and video 2 & video 3 are relatively close, but they do not seem to have much in common (e.g., the three videos do not share the same motion or appearance). On the contrary, video 3 and video 4 are farther apart. Therefore, I am skeptical about the claim that the distance between clusters is determined by the appearance of the videos. It's important to base such claims on statistical results from a larger sample rather than a few videos, as the latter can lead to a higher degree of randomness. I suggest gathering more video data to support the argument. 4. In Figure 4, Part D, the authors mention that it represents the visualization of appearance-debiased latent codes, but it's not clear how it relates to Part C. How does Part D reflect appearance debiasing? 5. In the section \"Temporal LoRAs Training\" on page 6, why does inserting spatial LoRA into the temporal path allow the temporal LoRA to ignore the appearance information in the training dataset? Why wont it affect spatial LoRA during the training of the temporal path? 6. How was Equation 6 derived? Why was this form of loss function with sampling used to eliminate appearance bias in the temporal information? Epsilon_anchor is used as an anchor, so why is there another epsilon_i later on? What is the purpose of having two anchors?",
+        "The explanation of the decentralized temporal loss is not very clear. It might be beneficial to verify the effect of this loss through more ablation experiments, especially in the context of video visualization. - Training LoRA does not appear to be computationally intensive, but it's advisable to specify the training cost in the article. - There are concerns about the generalizability of this method for video motion extraction. It's worth considering the possibility of developing a unified video motion extraction module to address this issue. - There are no supplementary videos, which makes the paper less convincing."
+      ],
+      "sys": [
+        {
+          "dim": "创新性",
+          "text": "论文相关工作部分仅综述了文本到视频生成、生成模型定制和可控视频生成等相关工作，但未充分对比与最相关的现有方法，如VideoCrafter和VideoComposer。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对低秩自适应（LoRA）的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节中，虽然提到了实验结果，但缺乏对实验结果的深入分析，例如不同方法的优缺点对比、实验结果的统计显著性检验等。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节对局限性的讨论过于简略，未充分说明MotionDirector的局限性及其原因。"
+        }
+      ],
+      "pairs": [
+        [
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "title": "Two Heads Are Better Than One: Exploiting Both Sequence and Graph Models in AMR-To-Text Generation",
+      "human_count": 2,
+      "sys_count": 2,
+      "match_count": 2,
+      "coverage": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "human": [
+        "This paper is written for an audience that is already familiar with the literature on AMR. One would hope that the result (two heads are better than one) might generalize beyond this specific case, but there is little evidence or discussion of that. I found the paper unnecessarily hard to read. The lead sentence of the abstract doesn't make it clear that AMR is well-established in the literature, and many of the cited papers have hundreds/thousands of citations. It may be useful to compare the description of the problem and the task in https://aclanthology.org/P18-1150.pdf (one of the key cited papers) with the description in this submission. This submission does not make it as clear that AMR is an established concept in the literature. Nor is it as clear what the task is. The cited paper follows the standard formula where there is a section labeled \"Experiments\" with a subsection on materials (5.1 data). The submission has a short section (4.1 Datasets) with references to LDC. This made it clear that this is a standard problem in the literature. But by the time I get to the discussion of the dataset, it should be clear what the task is, and how much work there is on this task. One would hope that the incremental improvement would be at least as good as the prior art in describing the problem and motivating it, but I found it easier to do that by reading the references than by reading this submission.",
+        "Actually, the multi-source structure (multiple encoders - one decoder) is a common approach in many NLP tasks. Even this paper does present some enhancements for the AMR-to-text generation task, the novelty of the proposed method appears to be somewhat constrained. 2. A commendable aspect of this paper is the authors' comparison of performance with GPT-4. However, considering that GPT-4 is a general model, the comparison may not be entirely equitable. It would be more appropriate to utilize an open-source large language model (e.g., Llama) for the experiment. This is crucial to verify the effectiveness of the proposed method in the context of Large Language Models."
+      ],
+      "sys": [
+        {
+          "dim": "方法论",
+          "text": "论文未对DualGen模型在不同类型AMR图上的性能进行深入分析，难以判断其泛化能力。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文第4节中，虽然进行了人类评估和案例研究，但评估指标较为单一，建议增加更多评估指标，例如语义相似度、流畅度等，以更全面地评估模型的语言生成能力。"
         }
       ],
       "pairs": [
@@ -43,56 +230,126 @@
         [
           1,
           1
-        ],
-        [
-          2,
-          2
         ]
       ]
     },
     {
-      "title": "Visual Chain of Thought: Bridging Logical Gaps with Multimodal Infillings",
-      "human_count": 4,
-      "sys_count": 5,
-      "match_count": 4,
+      "title": "Coupling Fairness and Pruning in a Single Run: a Bi-level Optimization Perspective",
+      "human_count": 3,
+      "sys_count": 4,
+      "match_count": 8,
       "coverage": 1.0,
-      "precision": 0.8,
-      "f1": 0.888888888888889,
+      "precision": 1.0,
+      "f1": 1.0,
       "human": [
-        "There is a lack of ablation study on the proposed method, making it difficult to estimate the effectiveness of individual components. For instance, while the recursive generation seems to be an important step, the paper does not provide any quantitative/qualitative evaluation of how such a process is advantageous to its counterpart (e.g., iterative). Looking at Figure 7, the text generated by the proposed method does not appear to be very novel compared to the one for the baseline. - While it could be unfair to directly compare the proposed zero-shot method with supervised approaches, it would still be reasonable to conduct evaluation on the ground truth annotations. Otherwise, it is unclear whether or not the method truly formulates the intermediate logical procedure for problem-solving. - Despite the superiority of the proposed method reported in Table 1, it appears that there is no clear advantage when considering different approaches independently (i.e., Figure 6). - The paper only considers a simplified setting of chain-of-thought, where the goal is to generate a single intermediate step based on its two adjacent neighbors. On the other hand, for complicated problems, multiple logical steps are typically required to form the chain-of-thought. How would the proposed approach generalize to these scenarios? More importantly, it is also unclear whether or not it can address out-of-domain reasoning problems, considering its heavy reliance on a pretrained large language model for inferring the intermediate steps.",
-        "One of the paper’s major motivations for VCoT is that it provides a human-interpretable insight into the AI system’s reasoning ability. However it’s not clear in what way, and which particular model’s predictions are explained by the proposed, synthetically generated VCoT images. Some details of the approach are unclear from the paper. - E.g., in Eq. (2), the argmax is computed over CLIP similarity scores between the current predicted text t_i, and what other element? - The notation in the Equation series (1-5) is also confusing. g appears to be a generative model that predicts text t_i in Eq. (1), and image v_i in Eq. (3). However, an argmax is computed over g(.) in Eq. (4), as if it were a score function. - What exactly is the scoring function, using which is v_i^{best} chosen in Eq. (4) ? - It appears that the Equations being referenced in the text of Sec. 3 and Sec. 4.2 might be incorrect. Unfortunately, the current version of Fig. 2 doesn’t clarify things either. The different blocks in the current color-scheme appear too similar to each other, and distinguishing between them is difficult for this reader. During task unification (of text-only WikiHow data), individual images are generated given individual text instructions. A number of candidate images for the time-step i are generated, and CLIP embedding similarity between the images and the corresponding text t_i is computed. The most relevant image is chosen. While this provides a sequence of images, there is no constraint that the images themselves, are “coherent” (related to each other). This could result in a sequence of different, apparently unrelated images despite the text being coherent and related to the corresponding images. It would be good if it were possible to scale the evaluation to a larger dataset. Currently, evaluation is only based on human feedback. However, this approach only scales at a significant cost. If the authors present an automated method ot evaluate the different aspects of the model, that might be a good contribution that makes the paper stronger. The overall approach is rather involved, with multiple blocks / processes that generate the final result. However, the influence of the individual blocks, e.g., “multi-point foveation”, “task unification” (+ captioning), etc., are not evaluated or discussed in detail. Minor comments: - Fig. 3 (left) typo -- (v_i’’, t_i’’) --> (v_i', t_i')? - The colors of the different blocks in the architecture diagram in Fig. 2 are too similar to each other.",
-        "Lack of verification on downstream tasks. Although the authors mention a lot about downstream evaluation in the paper, it mainly focuses on directly evaluating the quality of the generated image/text in the downstream dataset.s However, a more important dimension, IMO, is whether the infilled image/caption is useful for downstream tasks. For example, when adding the generated data as additional training data for visual storytelling and wiki-how, if the performance of the SOTA model (retrieval/generation) can be further boosted or not? 2. About the recursive approach to generate the infillings. It's claimed in the paper a lot of advantages of `recursive approach` vs `iterative approach` about dynamics, such as `A recursive approach makes it easier to dynamically determine when infillings are not beneficial to the task and when to stop generating them in contrast to an iterative approach`. However, in Sec. 4.4, the authors admit that a fixed depth is the best in practice, which eliminates the advantages claimed before, especially about dynamically determining/stopping. 3. I don't quite get why the recursive approach is called `novelty-driven`. To me, there is nothing emphasizing adding additional novel content in the recursive algorithm. 4. There are many hyperparameters in the paper, such as the number of text candidates, number of image candidates, number of few-shot examples. However, no ablation experiments are conducted to validate them. 5. No ablation on the effectiveness of core components of the method, eg, multipoint foveation, novelty/consistency-driven infilling. 6. How are the generated multimodal infillings compared with ground-truth quality? It's the upper-bound of this task and should be evaluated too.",
-        "(W1) The generated multimodal infillings show marginal improvements compared with the simple baselines (Chain-of-Thought and Chain-of-Images). As can be seen in Table 2, VCoT has a roughly 30% chance of winning on average. It indicates that the proposed method does not dominate the baselines in downstream tasks (i.e., WikiHow and Visual Storytelling). Even worse, the gap between VCoT and the method that does not use any infillings (No Infilling) also seems marginal, although VCoT leverages several strong pre-trained models (e.g., GPT-3.5, CLIP, StableDiffusion, and OFA) with massive computation. (W2) The paper mainly focused on checking the quality of the generated multimodal infillings. It would be great if the paper presented the impact of VCoT in existing evaluation protocols at VIST and WikiHow tasks. (W3) There are several components in VCoT, but the paper does not present any ablation studies. So, I can’t check the individual contribution of the proposed components. For example, - VCoT generates multipoint foveation (MPF) only with text (i.e., w/o image captions) - VCoT generates multimodal infillings without MPF (i.e., w/o MPF) - VCoT generates a single multimodal infilling, not multiple (i.e., five) candidates (i.e., w/o consistency-driven selector) (W4) There are too many typos and inconsistent notations in the manuscript as below. I request the authors to review the entire paper thoroughly. - In Section 3, the main text describes that the judgment function j takes vision and language data, but the function takes the text in Eq. 2. - In Section 3, textual references of Equation 3 and 4 should be Equation 5 and 6, respectively. - In Equation 6, “Eq. 6 holds” should be “Eq. 5 holds” - In Section 4, textual references of Equation 5 should be Equation 7."
+        "The idea of using bi-level optimization is not new to pruning. [a] uses it in a very similar fashion to that in the paper. While [a] is cited in the manuscript, it is not explicitly called out that they also use a very similar bi-level optimization framework - which looks misleading. W2. Definition 2 (Compressed Model Performance Degradation) and Definition 3 (Performance Degradation Fariness) seems unnecessary, since the authors essentially use only the fairness perfromance metric (definition 1) in practice when pruning the model. W3. Experiments are limited across dimensions such as datasets, models. More datasets (including larger ones) should be included such as in [b]. Larger models such as ResNets should also be included in the study. W4. Stronger baselines need to be used. At the moment, none of the baselines used optimize for fairness. However, there are other works such as [b] that optimize for fairness and should be used as a baseline to show the benefit of bi-level optimization over existing pruning approaches. Overall, I feel that the paper is still incomplete and is not yet ready for publishing. Moreover, I observe limited novelty in this work due to lack of difference from [a]'s pruning objective (Equation 1). Instead of the regulariser, the authors have replaced it with equation 8 of the manuscript which is directly bought in from [c]. [a] Advancing Model Pruning via Bi-level Optimization. Zhang et al. NeurIPS 2022. [b] Fairgrape: Fairness-aware gradient pruning method for face attribute classification. Lin et al. ECCV 2022 [c] On Convexity and Bounds of Fairness-aware Classification/ Wu et al. WWW 2019.",
+        "My main concern is the random initiation of the mask. It is not clear what kind of randomization is used in the experiment, and whether different randomization strategies will lead to different performances. - The paper presents a bi-level pruning method (i.e., optimizing one variable while fixing another one). How do you guarantee the convergence theoretically. Again, since the mask is randomly initialized, will different randomization lead to different convergences? Noted that different randomization could also impact the objective function (leading to different landscapes), thus, both theoretical and experimental studies regarding the issue of convergence should be conducted. - Based on the results in Fig. 3 and 4, the improvement seems to be very marginal. It is not clear to me whether the improvement is significant. - The adopted datasets and models for evaluation seem to be toy to me, perhaps more realistic dataset (e.g., healthcare) and more advanced model should be evaluated. - The motivation of using conves relaxation in 4.3 is not clear to me. Based on the submission, it seems the advantage of using convex relaxation is to let the fairness constraint convex and differentiable, but noted that our deep neural network is non-convex in nature (e.g., ReLU, maxpooling, etc.), the argument above is not convincing to me.",
+        "The experiment suffers from samll scale. Only small models (ResNet10 and Mobilenetv2) are used as an uncompressed model. The used datasets (CelebA and LFW) are also small. 2. Althogh the propsed method is reasonable, it seems trivial. Eq 5 defines the joint optimization framework. It simply combines two constrains. This paper is short of novel techniques."
       ],
       "sys": [
         {
+          "dim": "创新性",
+          "text": "论文第2节相关工作部分，虽然提到了公平分类、网络剪枝和剪枝神经网络中的公平性研究，但未充分对比BiFP与其他公平剪枝方法的差异，如FairGRAPE等。"
+        },
+        {
           "dim": "方法论",
-          "text": "论文第5节中的人体评估部分，虽然使用了人类评估，但评估指标较为单一，缺乏对VCOT方法性能的全面评估。"
+          "text": "论文中未明确说明如何选择公平性约束的具体形式，以及如何平衡公平性、性能和效率之间的关系。"
         },
         {
           "dim": "论证与证据",
-          "text": "论文第3节对VCOT方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+          "text": "论文第3节对BiFP框架的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
         },
         {
           "dim": "论证与证据",
-          "text": "论文第4节中提到的“新颖性和一致性驱动的递归填充”缺乏具体的算法描述，读者难以理解其具体实现方式。"
-        },
-        {
-          "dim": "论证与证据",
-          "text": "论文第5节中的人体评估部分，虽然使用了人类评估，但评估指标较为单一，缺乏对VCOT方法在不同任务上的综合评估。"
-        },
-        {
-          "dim": "写作表达",
-          "text": "论文第5节结论部分未明确指出VCOT方法的局限性，也未提出未来研究方向（第6节第1段）。"
+          "text": "论文第5节实验结果分析部分，主要关注了BiFP与其他剪枝方法的性能和公平性对比，但未深入分析BiFP在不同场景下的适用性和局限性。"
         }
       ],
       "pairs": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
         [
           0,
           3
         ],
         [
           1,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "title": "Text-To-Energy: Accelerating Quantum Chemistry Calculations through Enhanced Text-to-Vector Encoding and Orbital-Aware Multilayer Perceptron",
+      "human_count": 4,
+      "sys_count": 7,
+      "match_count": 5,
+      "coverage": 0.5,
+      "precision": 0.7142857142857143,
+      "f1": 0.588235294117647,
+      "human": [
+        "Nowadays, using machine learning techniques to study science problems is very popular and attracts a lot of beginners in this area. It is fine to make some mistakes at the first step. Here, the reviewer would like to point out some possible mistakes in this paper. 1. If the authors want to use machine learning to study the problem in a new research area, please check the evaluation metric in that area first. For example, the so-called chemical accuracy in quantum chemistry is about 1.7 mHa = 0.0017 Ha. However, in this paper, all the calculation results are given at the level of 0.1 Ha, which is far from the requirement for the evaluation. 2. Please check if there is some existing terminology that aligns with your methodology. Generating DFT data and learning them through neural networks is a well-established research area. One can find related algorithms on Google by searching \"machine learning force field\". 3. Before creating your dataset, please check if there is an existing dataset that can meet your requirements. As for this paper, there are plenty of existing datasets where the authors can compare the proposed method with existing baselines, e.g., Molecular Dynamics 17, Open Catalyst Project. 4. Please make sure the benchmark is meaningful. For example, a comparison between NN-VMC methods (FermiNet/Psiformer) and DFT methods in terms of total energy is meaningless, because the NN-VMC methods directly deal with the Schrodinger equation while the DFT methods compute the energy through the energy functional.",
+        "While results are promising, T2E is only trained on a few thousand data points and tested on few handful of systems. Testing on much larger and diverse datasets would be needed for broader adoption. 2. Ablation studies that remove various parts of T2E could help clarify how important each component is to the model's performance. This is not explored in the current version of the paper. For example, why was the CLIP text encoder chosen as text encoder? 3. T2E is benchmarked on small atoms and molecules. Evaluating performance on slightly larger systems (methane etc) would better validate capabilities.",
+        "The paper claims to introduce a novel approach by combining text-to-vector encoding and MLP. However, it appears that the proposed method is essentially an application of existing techniques without significant innovation. The authors should provide a strong rationale for the novelty of their approach, highlighting the specific contributions that make T2E distinct from existing methods.",
+        "* The experiments do not show the usefulness of the proposed method since they are accurate in training data. They need to show the extrapolation results, such as molecule results of unknown combinations of known elements. Although there are results of unknown atom energy prediction in Section 4.2, they are not compared with baseline methods, and final MAEs are not described. * Since the proposed method can be considered a neural network potential (NNP) using the textual representation of input atoms, existent NNPs should be baseline methods for empirical comparison."
+      ],
+      "sys": [
+        {
+          "dim": "创新性",
+          "text": "论文第2节相关工作部分对现有方法的对比不够充分，特别是与T2E方法具有相似性的方法，如FermiNet和PsiFormer，缺乏深入对比和分析。"
+        },
+        {
+          "dim": "创新性",
+          "text": "论文第4节对T2E方法的技术贡献评估不够深入，未充分说明T2E方法相较于现有方法的创新点和优势。"
+        },
+        {
+          "dim": "方法论",
+          "text": "论文未讨论T2E模型的局限性，如适用范围和可能失效的条件。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对T2E方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节对实验结果的讨论不够深入，仅简单提及T2E方法在预测精度和计算效率方面的优势，未对实验结果进行更深入的分析和解释。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节对未来工作的展望较为笼统，未提出具体的改进方向和计划。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文第5节对未来工作的描述过于笼统，缺乏具体的实施计划和预期目标。"
+        }
+      ],
+      "pairs": [
+        [
+          2,
+          0
+        ],
+        [
+          2,
           1
         ],
         [
@@ -101,7 +358,203 @@
         ],
         [
           3,
+          3
+        ],
+        [
+          3,
           4
+        ]
+      ]
+    },
+    {
+      "title": "M-IDAS: MULTI-MODAL INTRUSION DETECTION AND ANALYTIC SYSTEM",
+      "human_count": 5,
+      "sys_count": 3,
+      "match_count": 0,
+      "coverage": 0.0,
+      "precision": 0.0,
+      "f1": 0,
+      "human": [
+        "## Overview - The overall contribution to the state of the art is \"unclear\" - There is a poor treatment of prior works (i.e., the outlined \"challenges\" are not really challenges) - The proposed methodology is not sound, and most design choices are arbitrary - The experiments are done on a self-collected dataset - The comparison with state of the art methods is unclear - The evaluation omits important details that are relevant for a significant contribution in this domain In what follows, I will better elaborate all of the abovementioned weaknesses. I endorse the authors to read my comments carefully -- most of which will be provided with direct quotations of the paper, and/or listing of references that support the observation. ### Unclear contribution None of the three claimed contributions (at the end of the Introduction) are compelling -- at least from the perspective of research oriented on machine learning based intrusion detection. Let me express my concerns directly: > We summarize a comprehensive taxonomy for IoT-related intrusion and implement an attack replay toolkit1, collected 15 categories of attacks across six domains at 4.52 GB. Given that (i) there are already many ```taxonomies for IoT intrusions``` (e.g., [M, N, O]) , and that (ii) there are already ```attack replay toolkits``` (e.g., [P, Q]), I wonder how relevant such a contribution is. Plus, what makes the it a ```comprehensive taxonomy```? On what basis is this adjective used? > We propose a pre-training approach (M-IDAS) for intrusion detection. It utilizes multiview features, leveraging multi-modal fusion to learn attack feature representation across multiple domains. Employing large-scale unlabeled intrusion data, M-IDAS learns the relationship among the fused features achieving an impressive average accuracy at 98.3% across diverse tasks. Claiming that 98.3% average accuracy is ```impressive``` is an overstatement. There are literally thousands of papers that achieve similar performance metrics (see, e.g., [L]). Hence, claiming this as a strong point of M-IDAS is not a compelling argument. > We newly propose cross-domain multi-modal intrusion traceability and explainability analytics, which extracts key fusion features and dependency trajectories from the attention score and offers insights into which domain influences the decision-making process. Merely ```proposing``` something is not a contribution per-se. The question is: does this proposal actually work well? For instance, how was this proposed method assessed, and what are its results? Without such evidence, it is impossible to gauge the quality of such a contribution. ### Poor \"Challenges\" In the Introduction, the paper states three challenges, and the alleged contribution seeks to overcome all of these. However, I disagree with the arguments provided in the paper. Specifically, I am not convinced either by the challenges themselves, nor by the way they are tackled in this paper. Let me elaborate by directly quoting the relevant parts of the text: > Traditional intrusion detection methods, reliant on a singular data source, encounter significant limitations. They struggle to cross-verify malicious activities, leading to an incomplete understanding of the attack landscape and increased vulnerability to evasion by sophisticated threats. This limitation stems from the inadequacy of individual data sets to comprehensively depict cyber-attack trends (CH1). I disagree. As written, it appears that this \"limitation\" is true universally. Having worked in a SOC, in practice, IDS (or rather SIEM or SOAR) do consider multiple data sources for their analyses (see, e.g., [A,B,C,D,J]). The fact that datasets have limitations is mostly a problem \"in research\", and specifically to those research whose proposals are based on publicly available data (e.g., [E]). However, there are even research papers that overcome this limitation in the specific field of machine learning: an example is, e.g., [F]. Hence, while I do agree that it is challenging for research papers to carry out evaluations that consider multiple perspectives (due to the lack of publicly available data) such a challenge only pertains to a strict subset of research efforts (which can be still overcome) > While multi-modal learning has shown breakthroughs in various fields its application in intrusion detection remains limited. Existing work, although applying multi-modal features, often focuses solely on network traffic data, lacking the breadth required for comprehensive attack description and cross-modal interpretation capabilities (CH3). I disagree. As pointed out in my previously referenced works, there are papers which achieve outstanding results in recognizing attacks even by just looking at the \"network perspective\". Plus, there are also works that do consider multiple perspectives, and do so efficiently. Finally, w.r.t. ```comprehensive attack description and cross-modal interpretation capabilities```, I specifically point the authors to [G,H,I] > To enhance data representation robustness and resolve CH1, we executed fifteen categories of IoT attacks in a controlled setting, collecting data across four modalities spanning six domains. Such an approach does not ```resolve``` CH1 (actually, it may make it worse). Indeed, what the paper describes is merely that by collecting data from various sources it is possible to \"tackle\" this problem. However, to ```resolve``` the challenge, one should have publicly released a lot of data that could universally help researchers to carry out similar assessments---and by \"a lot\" I mean that it should encompass various environments (and not just one). Hence, while I do appreciate the willingness of sharing the data (and code), this will hardly ```resolve``` CH1. Finally, it is unclear what an ```IoT attack``` actually is. > Finally, to tackle CH3, we present a bidirectional encoder classification model with a multi-head attention mechanism for intrusion detection. This model concurrently utilizes an attention score for cross-domain interpretative analysis. The effectiveness is validated through 15 attack detection tasks across six categories, achieving an average F1 of 97.7%. Ground truth construction for each attack type verifies cross-domain interpretability, with an average accuracy of 94.4%. Such a description is not very compelling. As I stated above, there are works that propose a \"multi-modal\" approach to detect intrusions/attacks. So, setting aside that CH3 is not truly a challenge (unless the paper provides evidence that _specific prior works_ have shortcomings, i.e., they cannot detect attacks that can actually be detected by the proposed method), the approach followed to tackle CH3 is not convincing: indeed, the data used to perform the analysis was collected \"in-house\", thereby raising skepticism about any evaluation that is carried out on the basis of such data (since it may include experimental bias [K,L]). ### Poor choice of testbed > By analyzing IoT-related attack vectors, we prioritized six primary categories that cumulatively represent approximately 90% of all documented incidents (IBM-Security, 2022). Notably, DDoS attacks, particularly those leveraging the Mirai botnet infrastructure, emerged as the most dominant, constituting an estimated 40%-50% of the total IoT attack landscape I appreciate the thought of focusing on threats that are more common nowadays, but this is not enough for a sound assessment: indeed, given the plethora of works that studied the in-and-outs of the Mirai botnet [R], the point is \"are these attacks a problem to detect today?\". In other words, it's true that the Mirai botnet is still active, but whether it represents a problem _for systems that are protected by an IDS_ is a different matter. Hence, if existing IDS can already detect the Mirai botnet (which, AFAIK, they can), then focusing just on this type of attack vector may be inappropriate to provide a convincing testbed. Of course, things would be **a lot better** if the paper showed that the considered attack (i) cannot be detected via existing techniques, but (ii) it can be detected with M-IDAS. Such an approach would dramatically improve the contribution of this work, both from a methodological perspective (with M-IDAS), and a practical one (with the proposed toolkit)! ### Unclear design steps >In light of the observations across six categories of attacks, we collect data from four modalities spanning six domains: network traffic, host system event logs, host system performance metrics, and IoT device status, for intrusion detection I have many concerns with this approach. Essentially, what is being described here is a method that is designed on the specific attacks carried out by Mirai. Hence, I am not surprised that the proposed method will work later (under the assumption that it is evaluated in a similar testbed). Nonetheless, I do not see a clear description about why ```six domains``` were chosen. Even after looking at the Appendix, I only saw the mentioning of these domains, but no justification. > In the present study, the architectural framework encompasses 12 Transformer blocks, each equipped with 12 attention heads within their respective self-attention layers. The dimensionality of each input token, denoted as H, is fixed at 768, while the total count of input tokens stands at 512. No justification is provided about why any of these thresholds are chosen. > After gathering multi-modal data, we accumulate information from various sources, including network traffic, system event logs, performance metrics, and the status of IoT devices. These data sources yield distinct feature sets: 80 dimensions from network traffic, 35 dimensions from system event logs, 23 dimensions from performance metrics, and 15 dimensions from IoT device status3 Again, no justification here (not even in the Appendix). This is problematic, especially in light of recent works showing that some features are not appropriate at all for the sake of ML-assisted intrusion detection. See, e.g, [S]. > Employing time T as the fundamental unit of data representation features corresponding to network traffic, process behavior, execution command patterns, and file operations are extracted within each interval T, where T is set to 10 ms. Why 10ms? Do note that exactly calibrating similar time-based thresholds is practically daunting. See the case study in [B]. ### Poor Evaluation details Section 4 is focused on the empirical evaluation of M-IDAS. Upon reaching this section, I was intrigued to find that there is mentioning of some sort of comparison between M-IDAS and some state-of-the-art techniques. **I strongly invite the authors to mention this sooner in the paper**, since it would have made the contribution more compelling. Nevertheless, the provided details for such an evaluation are shallow. In fact, the proposed M-IDAS is compared with 5 prior works which proposed to use some ML methods to detect intrusions. However, while the results in Table 1 do show a substantial improvement over all such prior works, it is unclear how the comparison was carried out _in practice_. Indeed, the text only reports the following: > We compare M-IDAS with various state-of-the-art (SOTA) methods for intrusion detection, including (1) fingerprint construction method: FlowPrint (Van Ede et al., 2020), (2) detection method based on host behavior: CSysCall (El Khairi et al., 2022), (3) detection method based on network traffic: Kitsune (Mirsky et al., 2018), (4) machine learning method based on multi-modal intrusion data: MNAD (Xu et al., 2022), and (5) deep learning method based on multi-modal intrusion data: M-CAD (Bahadoripour et al., 2023). The experimental results are shown in Table 1. Additional comparison studies can be found on our website 4 First, upon checking the website (in the second-half of October 2023), there was no mentioning of any ```additional comparison studies``` (and, regardless, I think it is unfair to provide technical details usable for peer-review on a public website). Second, there is no additional information provided (anywhere) about how such prior works have been reimplemented. Although some of these are publicly available, I wonder: where these methods taken \"off-the-shelf\" and used to perform the exact same analysis as M-IDAS? Because, if so, then the comparison is unfair. For instance, take Kitsune: it is an autoencoder which is trained on a completely different testbed than the one used in this paper. In contrast, M-IDAS is \"trained\" on a testbed that is specific of Mirai. Hence, I am not surprised at all that M-IDAS outperforms kitsune---but such a large gap is not due to M-IDAS, but rather due to the fact that it was trained on data that is more representative of the test data. I recommend performing an ablation study that clearly allows one to identify \"where\" the performance enhancements provided by M-IDAS lie in. Furthermore, other concerns with the evaluation are: 1) the lack of information on the hardware used to perform the experiments, as well as of the runtime of M-IDAS (for both training and testing it)",
+        "2) whether the assessment was repeated enough times to derive statistically significant conclusions or not (for instance, is 0.990 accuracy on Task1-10 due to a single \"train:test\" assessment, or is it the average among many assessments, each with a different train and test set?)",
+        "indeed, the text only reports that ```the dataset was split with a 8:1:1 ratio```. I strongly invite the authors to embrace the suggestions of [L]. Lastly, I am confused of how the proposed method should provide benefits in terms of interpretability. The analysis discussed in Section 4.3 is shallow and appears to be done subjectively. Given the many ways to tackle such a problem (e.g., [G]), it is disappointing that there is no mentioning of any related work that could be used to support the method used to validate the analysis. #### Some additional issues: * Typo on the title of section 4.1 * The work by Jing Xu occurs twice in the references * The work by Mirsky is not just an arxiv preprint, but an accepted paper to NDSS18. #### EXTERNAL REFERENCES [A]: Bryant, Blake D., and Hossein Saiedian. \"Improving SIEM alert metadata aggregation with a novel kill-chain based classification model.\" Computers & Security 94 (2020): 101817. [B]: Apruzzese, Giovanni, et al. \"The role of machine learning in cybersecurity.\" Digital Threats: Research and Practice 4.1 (2023): 1-38. [C]: Muhammad, Adabi Raihan, Parman Sukarno, and Aulia Arif Wardana. \"Integrated Security Information and Event Management (SIEM) with Intrusion Detection System (IDS) for Live Analysis based on Machine Learning.\" Procedia Computer Science 217 (2023): 1406-1415. [D]: Pierazzi, Fabio, et al. \"Scalable architecture for online prioritisation of cyber threats.\" 2017 9th International Conference on Cyber Conflict (CyCon). IEEE, 2017. [E]: Mirsky, Yisroel, et al. \"Kitsune: an ensemble of autoencoders for online network intrusion detection.\" NDSS (2018) [F]: Han, Xueyuan, et al. \"Unicorn: Runtime provenance-based detector for advanced persistent threats.\" NDSS (2020). [G]: Nadeem, Azqa, et al. \"Sok: Explainable machine learning for computer security applications.\" 2023 IEEE 8th European Symposium on Security and Privacy (EuroS&P). IEEE, 2023. [H]: Yagemann, Carter, et al. \"{ARCUS}: symbolic root cause analysis of exploits in production systems.\" 30th USENIX Security Symposium (USENIX Security 21). 2021. [I]: Nadeem, Azqa, et al. \"Alert-driven attack graph generation using s-pdfa.\" IEEE Transactions on Dependable and Secure Computing 19.2 (2021): 731-746. [J]: De Shon, Markus. \"Information Security Analysis as Data Fusion.\" 2019 22th International Conference on Information Fusion (FUSION). IEEE, 2019. [K]: Arp, Daniel, et al. \"Dos and don'ts of machine learning in computer security.\" 31st USENIX Security Symposium (USENIX Security 22). 2022. [L]: Apruzzese, Giovanni, Pavel Laskov, and Johannes Schneider. \"SoK: Pragmatic Assessment of Machine Learning for Network Intrusion Detection.\" IEEE EuroS&P (2023) [M]: Albulayhi, Khalid, et al. \"IoT intrusion detection taxonomy, reference architecture, and analyses.\" Sensors 21.19 (2021): 6432. [N]: Hindy, Hanan, et al. \"A taxonomy of network threats and the effect of current datasets on intrusion detection systems.\" IEEE Access 8 (2020): 104650-104675. [O]: Jamalipour, Abbas, and Sarumathi Murali. \"A taxonomy of machine-learning-based intrusion detection systems for the internet of things: A survey.\" IEEE Internet of Things Journal 9.12 (2021): 9444-9466. [P]: The AVISPA Project Automated Validation of Internet Security Protocols and Applications https://www.avispa-project.org/ [Q]: Neisse, Ricardo, et al. \"SecKit: a model-based security toolkit for the internet of things.\" computers & security 54 (2015): 60-76. [R]: Antonakakis, Manos, et al. \"Understanding the mirai botnet.\" 26th USENIX security symposium (USENIX Security 17). 2017. [S]: Liu, Lisa, et al. \"Error prevalence in nids datasets: A case study on cic-ids-2017 and cse-cic-ids-2018.\" 2022 IEEE Conference on Communications and Network Security (CNS). IEEE, 2022.",
+        "Motivation is unclear and not well discussed. Although the paper claims that single-source data does not contain as much information as multi-source data, which may help detect complicated attacks, it does not give specific examples. For common attacks, single-source data is sufficient. For example, the DDOS attack mentioned in the paper could be detected by network logs alone. Using multi-source data is unnecessary and may even introduce more noise. Therefore, it would be nice if this paper could discuss more about the specific cases where multi-source data performs better than single-source data, give some case studies, and evaluate on those specific cases. - Lack of technical contribution. After reading the entire paper, if I understand it correctly, the proposed method is based entirely on existing methods. I'm a little concerned because it also doesn't look like new CHALLENGES were encountered and solved during the implementation. Some of the challenges I thought were not discussed. For example, security data formats are usually very different from NLP, and in my previous experience, e.g., log data, would have hundreds or even thousands of times larger vocabularies than general NLP tasks. Therefore, we usually need a specific kind of tokenization and abstraction preprocessing. However, this is not mentioned in this paper. Also, merging different data can be difficult. However, it seems the paper does not propose an effective solution for this but pick features by human, which is not automatic, generalizable, hard to justify, and need more ablation study. Also, please clarify the techniques implemented by existing papers and add citations properly (e.g., I wonder if Masked M-token Mode and ATTENTION-DEPENDENCE GRAPH CONSTRUCTION are implemented by this paper or existing work). - Lack of discussion of threat model and adaptive attacks. As an attack paper, it would be better if the paper could discuss the attack settings, threat models, and adaptive attacks (e.g., mix DDOS requests with normal requests). - Since this paper uses its own dataset (I understand that public data is usually unavailable in security research), I would expect to see more dataset details to tell whether or not the simulated data matches the real attack scenarios. As also mentioned in the paper, the security data is imbalanced data, and the benign data would take the majority. So, I wonder how many benign/malicious were included in the datasets. When evaluating how the labels are generated, is there any guarantee for such labeling? I am also concerned about whether randomly picking at most 300 samples from each attack class could guarantee the integrity of attacks. Also, the paper mentioned benign datasets. When running on such benign datasets, how many false alarms will be produced? Meanwhile, does the testing dataset only contain unknown attacks that are different from the training datasets? If not, could the method generalize to unknown attacks? - Lack of necessary ablation study and evaluation details. Comparing different embedding models, downstream task models, and existing single-modal and multi-modal methods could be helpful.",
+        "While the paper presents an overview of the M-IDAS system, it lacks in-depth detail regarding the methodology. Readers might require more information on the specifics of feature extraction, data fusion, and the architecture of the proposed model. A more in-depth technical explanation is essential for understanding the approach. 2. The paper mentions achieving impressive results, but it does not provide a comprehensive discussion of the empirical validation process. A more detailed presentation of the experimental setup, data sources, and implementations would enhance the transparency of the research."
+      ],
+      "sys": [
+        {
+          "dim": "方法论",
+          "text": "论文第3节对M-IDAS系统中的可解释性分析部分描述不足，未详细说明如何从注意力分数中提取关键融合特征和依赖轨迹，缺乏对可解释性分析方法的深入探讨。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对M-IDAS中多模态特征提取和融合方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节中，实验部分仅展示了实验结果，但未对实验设置进行详细说明，例如数据集的来源、预处理方法等，这不利于读者理解实验过程和结果。"
+        }
+      ],
+      "pairs": []
+    },
+    {
+      "title": "Learning Rate Re-scheduling for AdaGrad in training Deep Neural Networks",
+      "human_count": 3,
+      "sys_count": 5,
+      "match_count": 6,
+      "coverage": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "human": [
+        "My major concerns are around the motivation and reproducibility of this work. I would raise the score if all problems are addressed. 1. The paper assumes that most practitioners add an additional learning rate schedule to AdaGrad, which might not be universally true. 2. The performance over other more popular optimizers (e.g., SGD and ADAM), are not significant. Thus motivation should be more solid, why we need a new adagrad over the other choices. 3. Reproducibility: There's no code provided in the supplemental materials, which is crucial for evaluating this paper that emphasize \"practice\" for multiple times and targets for higher performance.",
+        "Although the paper is theoretically and experimental sound, there are still some questions need to be discussed in this paper: 1. The main contribution of this paper is to propose a learning rate re-scheduling method. But the detail of the proposed learning rate re-scheduling method is missing. In particular, the authors should compare the proposed learning rate re-scheduling method with existing methods. 2. In Eq. (3), where is the element-wise matrix product used? Note that g_t should be a vector. 3. Is \\sqrt{T} a constant? 4. The convergence analysis of the variants of AdaGrad and Shampo should be provided. 5. The experimental results are not convincing. The authors should compare the proposed algorithm with more recently proposed algorithms. 6. Both the English language and equations in this paper need to be improved.",
+        "The work by Anil et al. [https://arxiv.org/abs/2002.09018] which the authors cite, actually uses a moving average for L and R, though this is not clear from the equations in the paper. In the appendix, Algorithm II shows that they use a moving average. This fixes the sqrt(t) issue addressed in the current work. They also use the decoupled weight decay, and should essentially achieve the same performance as the ShampooW proposed in the current work. This paper in 2020 is referenced by some more recent work on Shampoo, which follow the same practice. In light of this previous work, it doesn't seem like the proposed method adds any practical benefit to the existing versions of Shampoo. Also, there is no strong reason to believe that AdaGradW adds any practical benefit over AdamW as well."
+      ],
+      "sys": [
+        {
+          "dim": "创新性",
+          "text": "论文第2节相关工作部分对AdaGrad优化器的相关研究综述不够充分，未提及一些重要的相关工作，如AdamW、RAdam、Adabelief等优化器，导致相关工作对比不够全面。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对LRR方法的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节实验部分虽然进行了对比实验，但缺乏对实验结果的深入分析，未能充分说明LRR方法的优势。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节结论部分未明确讨论LRR方法的局限性，也未提出未来研究方向。"
+        },
+        {
+          "dim": "写作表达",
+          "text": "论文相关工作部分（见论文第2节），对AdaGrad优化器的相关研究综述不够全面，未提及一些重要的相关工作，如AdamW、RAdam等。"
+        }
+      ],
+      "pairs": [
+        [
+          0,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          4
+        ]
+      ]
+    },
+    {
+      "title": "Self-Supervised Deep Visual Stereo Odometry with 3D-Geometric Constraints",
+      "human_count": 4,
+      "sys_count": 4,
+      "match_count": 16,
+      "coverage": 1.0,
+      "precision": 1.0,
+      "f1": 1.0,
+      "human": [
+        "The negative aspects of the paper are: (1) As highlighted in Section 1.1, the primary contribution is \"3D geometric constraint, which enforces a realistic structure of the scene over consecutive frames and models static as well as moving objects.\" This contribution is discussed in Section 3.3. where it is mentioned that this idea is inspired by Mahjourian et al. (2018). However, it remains somewhat unclear how the proposed Algorithm 1 differs from the approach in Mahjourian et al. (2018). The latter focused on explicitly considering inferred 3D geometry for the entire scene and enforcing consistency in 3D point clouds and ego-motion across consecutive frames, solved through a novel backpropagation algorithm. The distinction between these contributions is not well articulated in the paper, and is essential to understand the relevance of the proposed work. (2) A significant portion of the mathematical analysis in Section 3.1 could be moved to the supplementary material as it primarily covers standard theoretical content. (3) Looking at Figure 1 and from Section 4.1., the main building blocks of the pipeline are FlowNet and PoseNet. These blocks are based on prior work without relevant novelty. (4) In the final sentence of Section 4.3, the authors assert that their method achieves state-of-the-art performance in visual odometry. However, a closer examination of Table 2 reveals that Yang et al. (2020) outperforms the proposed method by a significant margin, raising concerns about the veracity of this statement. (5) In Table 3, the proposed approach (Ours) is worse than previous works, even when considering that some of these prior works are over four years old. (6) The proposed approach (Ours) in Table 4 is the top performer, but this is expected, as it is the only work using stereo cameras. Stereo imagery considerably simplifies depth prediction in terms of accuracy, robustness and removes the ill-posed aspect of monocular approaches.",
+        "The paper looks incomplete. I hope that the authors can significantly revise the paper and add more content for the next submission. The novelty of the proposed method is very limited. Please reconsider this problem and better claim the contribution. The evaluation results show that the proposed method is worse than previous methods in both visual odometry and optical flow estimation.",
+        "Use the incorrect template, should be ICLR 2024 instead of ICLR 2023. 2. An incomplete reference 3. The experimental results are not better than the baseline, and the experiments are not comprehensive. For example, for the comparison of trajectory accuracy, the EuRoC dataset can be used. There is also no comparison with the state-of-the-art in some SLAM methods, such as ORB-SLAM3.",
+        "What is most surprising about the paper is that not *everything* is improved by the use of a stereo camera pair when compared to a monocular system - the results in the paper show a clearly disadvantage of the stereo-based method for estimation of optical flow and camera pose. A major weakness of the paper is therefore that it does not even propose a hypothesis for the cause of this unexpected result. As it stands, this provocative issue was graciously acknowledged but no further discussed. It is understandable that validation of the method and comparison against other algorithms for the underwater monitoring scenario which motivates the work may not be practical, due to the lack of standardized datasets. However, there should be some justification as to if and why, given the shortcomings in the results in comparison to other methods, particularly in the robustness of the estimated optical flow, the proposed framework would indeed generalize to scenarios radically different from those covered by the KITTI dataset. The names \"FlowNet\" and \"PoseNet\" proposed in section 4.1 are \"taken,\" have already been applied to similar contexts in https://arxiv.org/abs/1612.01925 and https://arxiv.org/abs/1509.05909, respectively. In the same section, it is not clear what in the eight-point algorithm is connected to the flipping layer it purportedly inspired."
+      ],
+      "sys": [
+        {
+          "dim": "创新性",
+          "text": "论文第2节相关工作部分，对深度视觉里程计、自监督学习和3D几何约束的综述不够全面，未提及一些重要的相关工作，如基于图神经网络的方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第3节对3D几何约束的原理描述只有两句话，未说明参数设置和实现细节，导致读者无法复现该方法。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第4节对实验结果的对比分析不够深入，未详细说明与其他方法的差异和优势。"
+        },
+        {
+          "dim": "论证与证据",
+          "text": "论文第5节对未来工作的描述过于简单，缺乏具体的研究方向和计划。"
+        }
+      ],
+      "pairs": [
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          3,
+          2
+        ],
+        [
+          0,
+          3
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          3
         ]
       ]
     }
