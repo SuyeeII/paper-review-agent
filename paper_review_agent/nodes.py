@@ -491,6 +491,71 @@ def node_writing_reflection(state: ReviewState) -> ReviewState:
 
 # ===== 主编汇总节点 =====
 
+def _extract_reviewer_scores(innovation_review: str, methodology_review: str, experiment_review: str, writing_review: str) -> dict:
+    """
+    从4份初审意见中提取各维度评分（格式：**总体评价**：X/10，...）
+    返回 {"innovation": int, "methodology": int, "experiment": int, "writing": int}
+    提取失败的维度不返回（调用方校验数量）
+    """
+    scores = {}
+    patterns = {
+        "innovation": (innovation_review, r'\*\*总体评价\*\*\s*[:：]\s*(\d+)\s*/\s*10'),
+        "methodology": (methodology_review, r'\*\*总体评价\*\*\s*[:：]\s*(\d+)\s*/\s*10'),
+        "experiment": (experiment_review, r'\*\*总体评价\*\*\s*[:：]\s*(\d+)\s*/\s*10'),
+        "writing": (writing_review, r'\*\*总体评价\*\*\s*[:：]\s*(\d+)\s*/\s*10'),
+    }
+    for dim, (text, pattern) in patterns.items():
+        match = re.search(pattern, text)
+        if match:
+            score = int(match.group(1))
+            if 0 <= score <= 10:
+                scores[dim] = score
+    return scores
+
+
+def _fix_editor_scores_align(summary: str, reviewer_scores: dict) -> str:
+    """
+    后处理：主编报告"各维度评分"表格必须与初审审稿人评分一致。
+    用初审分数覆盖主编表格里的分数（LLM可能擅自修改），并重算综合评分。
+    """
+    required = ["innovation", "methodology", "experiment", "writing"]
+    if not all(dim in reviewer_scores for dim in required):
+        return summary  # 任一维度提取失败就不强制覆盖
+
+    # 各维度在表格中的中文名
+    dim_names = {
+        "innovation": "创新性",
+        "methodology": "方法论",
+        "experiment": "论证与证据",
+        "writing": "写作表达",
+    }
+
+    # 1. 用初审分数覆盖表格分数
+    changed = False
+    for dim, name in dim_names.items():
+        expected = reviewer_scores[dim]
+        # 匹配 "| 创新性 | X |" 形式（只替换分数单元格，保留后面的说明列）
+        pattern = r'(\|\s*' + re.escape(name) + r'\s*\|\s*)\d+(\s*\|)'
+        match = re.search(pattern, summary)
+        if match and int(match.group(0).split("|")[2].strip()) != expected:
+            summary = summary[:match.start()] + match.group(1) + str(expected) + match.group(2) + summary[match.end():]
+            changed = True
+
+    # 2. 重算综合评分（= 四维之和）
+    total = sum(reviewer_scores[dim] for dim in required)
+    pattern_total = r'(\|\s*\*\*综合评分\*\*\s*\|\s*\*\*)\d+(/40\*\*\s*\|)'
+    match_total = re.search(pattern_total, summary)
+    if match_total:
+        current_total = int(re.search(r'\*\*(\d+)/40\*\*', match_total.group(0)).group(1))
+        if current_total != total:
+            summary = summary[:match_total.start()] + match_total.group(1) + str(total) + match_total.group(2) + summary[match_total.end():]
+            changed = True
+
+    if changed:
+        print(f"[后处理] 主编评分已对齐初审：{reviewer_scores['innovation']}+{reviewer_scores['methodology']}+{reviewer_scores['experiment']}+{reviewer_scores['writing']}={total}/40")
+    return summary
+
+
 def _fix_editor_total_score(summary: str) -> str:
     """
     后处理：自动计算主编综合评分，替换掉LLM可能算错的加法
@@ -845,6 +910,9 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
     summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
+    # 后处理：主编表格评分必须与初审审稿人评分一致（LLM可能擅自修改各维度分数）
+    reviewer_scores = _extract_reviewer_scores(innovation, methodology, experiment, writing)
+    summary = _fix_editor_scores_align(summary, reviewer_scores)
     # 后处理：对主要优点进行去重和重新编号
     summary = _fix_editor_advantages_format(summary)
     # 后处理：去掉主要缺陷里的加粗格式，保持格式统一，限制最多6条
