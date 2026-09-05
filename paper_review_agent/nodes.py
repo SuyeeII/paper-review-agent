@@ -401,6 +401,31 @@ def _fix_writing_review_overall(review_text: str) -> str:
     return new_review
 
 
+def _fix_no_defect_deduction(review_text: str) -> str:
+    """
+    后处理：当审稿人"主要缺陷"为"（本维度未发现明显问题）"时，
+    "扣分说明"不应再列扣分理由（否则自相矛盾：没缺陷却扣分）。
+    此时把扣分说明改为与"未发现明显缺陷"一致的表述。
+    """
+    if '未发现明显问题' not in review_text:
+        return review_text
+
+    # 定位扣分说明部分：**扣分说明**：...（到下一个**或文本结束）
+    match = re.search(r'(\*\*扣分说明\*\*[：:]\s*)(.*?)(\n(?=\*\*)|\Z)', review_text, re.DOTALL)
+    if not match:
+        return review_text
+
+    prefix, content, suffix = match.group(1), match.group(2), match.group(3)
+    # 如果扣分说明已经在说"未发现明显问题"，就不动
+    if '未发现' in content:
+        return review_text
+
+    new_content = '该维度未发现明显缺陷，评分主要基于整体表现的进一步提升空间。'
+    new_review = review_text[:match.start()] + prefix + new_content + suffix + review_text[match.end():]
+    print("[后处理] 主要缺陷为'未发现明显问题'但扣分说明列了扣分理由，已统一口径")
+    return new_review
+
+
 # ===== 论文结构解析节点 =====
 
 def node_paper_structure(state: ReviewState) -> ReviewState:
@@ -435,6 +460,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = _clean_placeholder_brackets(review)
     # 后处理：去掉LLM输出的整句重复内容
     review = _deduplicate_repeated_sentences(review)
+    # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
+    review = _fix_no_defect_deduction(review)
     print("[审稿] 创新性审稿完成")
     return {
         "innovation_review": review,
@@ -459,6 +486,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = _clean_placeholder_brackets(review)
     # 后处理：去掉LLM输出的整句重复内容
     review = _deduplicate_repeated_sentences(review)
+    # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
+    review = _fix_no_defect_deduction(review)
     print("[审稿] 方法论审稿完成")
     return {
         "methodology_review": review,
@@ -483,6 +512,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = _clean_placeholder_brackets(review)
     # 后处理：去掉LLM输出的整句重复内容
     review = _deduplicate_repeated_sentences(review)
+    # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
+    review = _fix_no_defect_deduction(review)
     print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
@@ -509,6 +540,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = _deduplicate_repeated_sentences(review)
     # 后处理：写作审稿人总体评价若出现创新维度措辞（复读其他审稿人），清理
     review = _fix_writing_review_overall(review)
+    # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
+    review = _fix_no_defect_deduction(review)
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,
@@ -1056,3 +1089,4 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
             "content": summary,
         }],
     }
+
