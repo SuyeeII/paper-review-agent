@@ -306,6 +306,52 @@ def filter_cross_dimension_issues(review_text: str, dimension: str) -> str:
     return review_text
 
 
+def _deduplicate_repeated_sentences(review_text: str) -> str:
+    """
+    后处理：去掉LLM输出中整句重复的内容（同一句话连续出现两次）
+    例如："论文第3节对XX分析不够深入，缺乏案例。论文第3节对XX分析不够深入，缺乏案例。"
+    只删除完全相同的连续重复片段，不影响正常内容
+    """
+    if not review_text:
+        return review_text
+
+    # 通用去重：把连续出现的完全相同句子合并为一个
+    def _dedup_segment(segment: str) -> str:
+        # 按句子切分（中英文标点）
+        sentences = re.split(r'(?<=[。！？.!?；;])', segment)
+        result = []
+        prev = ""
+        for s in sentences:
+            s_stripped = s.strip()
+            if s_stripped and s_stripped == prev:
+                continue  # 与上一句完全相同，跳过
+            result.append(s)
+            if s_stripped:
+                prev = s_stripped
+        return ''.join(result)
+
+    # 对整段文本做处理：按行处理，但注意编号条目内重复句的处理
+    lines = review_text.split('\n')
+    new_lines = []
+    for line in lines:
+        # 如果一行内出现完全相同的子句重复（如"AAA。AAA。"），去重
+        # 用循环反复去重，直到不再变化
+        changed = True
+        while changed:
+            changed = False
+            # 匹配 "X。X。" 或 "X！X！" 等完全重复模式（中间无其他字符）
+            m = re.search(r'(.{8,}?[。！？!?])\1', line)
+            if m:
+                line = line[:m.start()] + m.group(1) + line[m.end():]
+                changed = True
+        new_lines.append(line)
+
+    result = '\n'.join(new_lines)
+    if result != review_text:
+        print("[后处理] 审稿人输出存在整句重复，已去重")
+    return result
+
+
 # ===== 论文结构解析节点 =====
 
 def node_paper_structure(state: ReviewState) -> ReviewState:
@@ -338,6 +384,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = _filter_hallucinated_methods(review, state["topic"], "创新性")
     # 后处理过滤：清理输出格式占位符括号残留
     review = _clean_placeholder_brackets(review)
+    # 后处理：去掉LLM输出的整句重复内容
+    review = _deduplicate_repeated_sentences(review)
     print("[审稿] 创新性审稿完成")
     return {
         "innovation_review": review,
@@ -360,6 +408,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = _filter_hallucinated_methods(review, state["topic"], "方法论")
     # 后处理过滤：清理输出格式占位符括号残留
     review = _clean_placeholder_brackets(review)
+    # 后处理：去掉LLM输出的整句重复内容
+    review = _deduplicate_repeated_sentences(review)
     print("[审稿] 方法论审稿完成")
     return {
         "methodology_review": review,
@@ -382,6 +432,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = _filter_hallucinated_methods(review, state["topic"], "论证与证据")
     # 后处理过滤：清理输出格式占位符括号残留
     review = _clean_placeholder_brackets(review)
+    # 后处理：去掉LLM输出的整句重复内容
+    review = _deduplicate_repeated_sentences(review)
     print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
@@ -404,6 +456,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = _filter_hallucinated_methods(review, state["topic"], "写作表达")
     # 后处理过滤：清理输出格式占位符括号残留
     review = _clean_placeholder_brackets(review)
+    # 后处理：去掉LLM输出的整句重复内容
+    review = _deduplicate_repeated_sentences(review)
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,

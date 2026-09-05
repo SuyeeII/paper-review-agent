@@ -92,6 +92,11 @@ def _clean_placeholder_brackets(text: str) -> str:
     ]
     for p in placeholders:
         text = re.sub(p, "", text)
+    # 清理"该维度的总体评分（X/10）"模板残留，整体替换为"X/10"（必须先于下面的单独删除执行）
+    text = re.sub(r"该维度的总体评分（(\d+)/10）", r"\1/10", text)
+    text = re.sub(r"（该维度的总体评分\s*(\d+)/10）", r"\1/10", text)
+    text = re.sub(r"该维度的总体评分（", "", text)
+    text = re.sub(r"（该维度的总体评分", "", text)
     # 清理可能残留的孤立括号（如"1. （）内容"）
     text = re.sub(r"（\s*）", "", text)
     return text
