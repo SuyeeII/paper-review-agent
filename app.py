@@ -59,9 +59,16 @@ def on_paper_file_upload(file_obj) -> str:
     """
     文件上传后，解析论文内容并返回
     内容存在后台State里，不显示在界面上
+    解析失败时返回空字符串（不把错误提示当论文内容），并在控制台打印原因
     """
     parsed = parse_paper_file(file_obj)
-    return parsed if parsed else ""
+    if not parsed:
+        return ""
+    if parsed.startswith("⚠️"):
+        # 解析失败：打印诊断信息，返回空，避免错误提示被当作论文内容传入审稿流程
+        print(f"[文件解析失败] {parsed}")
+        return ""
+    return parsed
 
 
 def run_review_ui(paper_content: str):
@@ -71,7 +78,7 @@ def run_review_ui(paper_content: str):
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
     if not paper_content or not paper_content.strip():
-        yield "请先上传论文文件（PDF / TXT / MD）！", "", "", "", "", "", "", None, "❌ 未上传论文文件，请先上传"
+        yield "请先上传论文文件（PDF / TXT / MD）！若已上传但提示此信息，可能是文件解析失败（PDF 需安装 PyPDF2），请查看运行控制台的诊断日志。", "", "", "", "", "", "", None, "❌ 未获取到论文内容，请先上传文件或检查解析依赖"
         return
 
     # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）

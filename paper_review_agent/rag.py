@@ -4,7 +4,7 @@
 """
 import os
 import numpy as np
-import faiss
+#import faiss
 from typing import List, Dict, Optional
 from openai import OpenAI
 from dotenv import load_dotenv

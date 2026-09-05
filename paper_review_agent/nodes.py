@@ -542,7 +542,7 @@ def _deduplicate_items(items: list, threshold: float = 0.5) -> tuple:
         # 去掉加粗标记
         text = text.replace('**', '')
         # 去掉标点和特殊字符
-        text = re.sub(r'[，。、；：！？""''（）【】《》\s\.\,\;\:\!\?\(\)\[\]<>]', ' ', text)
+        text = re.sub(r'[，。、；：！？""\'\'（）【】《》\s\.\,\;\:\!\?\(\)\[\]<>]', ' ', text)
         # 简单分词：按空格分割，然后过滤
         words = text.split()
         keywords = set()
