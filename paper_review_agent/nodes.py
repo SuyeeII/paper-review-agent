@@ -1,6 +1,7 @@
-"""论文多视角审稿助手节点定义（多Agent并行评审架构）
+﻿"""论文多视角审稿助手节点定义（多Agent并行评审架构）
 4个维度审稿人并行评审 → 自我反思修正 → 主编汇总
 """
+import os
 from typing import Optional
 import re
 from paper_review_agent.state import ReviewState, ReviewPhase
@@ -15,6 +16,10 @@ from paper_review_agent.prompts import (
     get_editor_summary_prompt,
     _clean_placeholder_brackets,
 )
+
+
+# 随机种子：默认42固定（保证日常使用输出稳定可复现）；评测脚本可设环境变量 PAPER_REVIEW_SEED 跑不同seed测稳定性
+_REVIEW_SEED = int(os.environ.get("PAPER_REVIEW_SEED", "42"))
 
 
 # ===== 后处理：过滤越界的主要缺陷（第二层防护，不依赖LLM，100%可靠）=====
@@ -592,7 +597,7 @@ def _fix_empty_suggestions(review_text: str) -> str:
 def _chat_with_quality_retry(llm, prompt: str, system_prompt: str, max_tokens: int, dimension: str) -> str:
     """
     输出稳定性增强：低温度 + 固定seed + 结构校验重试
-    - temperature=0.3（降随机性）、seed=42（固定随机种子，模型支持时生效）
+    - temperature=0.3（降随机性）、seed=_REVIEW_SEED（固定随机种子，模型支持时生效）
     - 校验关键结构（主要缺陷/具体修改建议必须存在），缺失时带修正提示重试一次
     """
     for attempt in range(2):
@@ -601,7 +606,7 @@ def _chat_with_quality_retry(llm, prompt: str, system_prompt: str, max_tokens: i
             system_prompt=system_prompt,
             temperature=0.3,
             max_tokens=max_tokens,
-            seed=42,
+            seed=_REVIEW_SEED,
         )
         has_defect = bool(re.search(r'\*\*主要缺陷\*\*[：:]', review))
         has_sugg = bool(re.search(r'\*\*具体修改建议\*\*[：:]', review))
@@ -624,7 +629,7 @@ def node_paper_structure(state: ReviewState) -> ReviewState:
         images=state.get("images") or 0,
         tables=state.get("tables") or 0,
     )
-    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2, max_tokens=3000, seed=42)
+    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2, max_tokens=3000, seed=_REVIEW_SEED)
     print("[结构解析] 论文结构解析完成")
     # 后处理：过滤结构解析中幻觉的方法名（如参考文献里编造论文中不存在的方法）
     structure = _filter_structure_hallucinated_refs(structure, state["topic"])
@@ -1259,7 +1264,7 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
 
     llm = get_llm()
     prompt = get_editor_summary_prompt(state["topic"], innovation, methodology, experiment, writing)
-    summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3, max_tokens=2000, seed=42)
+    summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3, max_tokens=2000, seed=_REVIEW_SEED)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
     # 后处理：主编表格评分必须与初审审稿人评分一致（LLM可能擅自修改各维度分数）
@@ -1303,4 +1308,5 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
             "content": summary,
         }],
     }
+
 
