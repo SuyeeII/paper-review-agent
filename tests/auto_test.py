@@ -20,6 +20,32 @@ sys.path.insert(0, _SCRIPT_DIR)
 
 from paper_review_agent.graph import run_review, format_review_result
 
+try:
+    from PyPDF2 import PdfReader
+    HAS_PYPDF2 = True
+except ImportError:
+    HAS_PYPDF2 = False
+
+
+def parse_paper(path: str) -> str:
+    """解析论文文件（PDF/TXT/MD），提取文本内容"""
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".pdf":
+        if not HAS_PYPDF2:
+            raise RuntimeError("PyPDF2 未安装，无法解析 PDF")
+        reader = PdfReader(path)
+        text_parts = []
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_parts.append(page_text)
+        return "\n".join(text_parts)
+    elif ext in (".txt", ".md", ".markdown"):
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.read()
+    else:
+        raise RuntimeError(f"不支持的文件格式：{ext}，仅支持 PDF / TXT / MD")
+
 # ===== 质量检查规则 =====
 
 # 1. 占位符残留（LLM照抄模板的痕迹）
@@ -155,8 +181,7 @@ def check_structure_quality(state: dict, results: list) -> None:
 
 def run_single_paper(paper_path: str) -> dict:
     """跑一篇论文，返回质量报告"""
-    with open(paper_path, encoding='utf-8') as f:
-        paper_text = f.read()
+    paper_text = parse_paper(paper_path)
 
     name = os.path.basename(paper_path)
     print(f"\n{'='*60}")
@@ -193,7 +218,7 @@ def main():
     papers_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "papers")
     paper_files = sorted([
         os.path.join(papers_dir, f) for f in os.listdir(papers_dir)
-        if f.endswith(('.txt', '.md'))
+        if f.endswith(('.txt', '.md', '.pdf'))
     ])
 
     if not paper_files:
