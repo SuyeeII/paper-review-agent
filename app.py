@@ -14,18 +14,30 @@ from paper_review_agent.pdf_parser import parse_paper_file
 _last_parse_meta = {"tables_md": "", "images": 0, "tables": 0}
 
 
+# 全局：最近一次上传文件的图表信息（tables_md/images/tables），审稿时透传
+_last_parse_meta = {"tables_md": "", "images": 0, "tables": 0}
+# 全局：最近一次解析的错误/警告信息（供界面显示具体原因）
+_last_parse_error = ""
+
+
 def parse_paper_file_ui(file_obj) -> str:
     """
     解析上传的论文文件，提取文本内容
     支持 PDF / TXT / MD
     返回提取的文本内容，如果解析失败返回空字符串
+    解析失败的具体原因记录到 _last_parse_error，供界面显示
     """
+    global _last_parse_error
+    _last_parse_error = ""
+
     if file_obj is None:
+        _last_parse_error = "未检测到上传文件"
         return ""
 
     # Gradio 的 File 组件返回的是文件路径字符串（单文件）或列表
     file_path = file_obj if isinstance(file_obj, str) else (file_obj[0] if isinstance(file_obj, list) and file_obj else None)
     if not file_path or not os.path.exists(file_path):
+        _last_parse_error = f"文件路径不存在：{file_path}"
         return ""
 
     try:
@@ -38,8 +50,16 @@ def parse_paper_file_ui(file_obj) -> str:
             print(f"[PDF解析] pdfplumber 提取文本 {len(parsed['text'])} 字符，表格 {parsed['tables']} 个，图片 {parsed['images']} 幅")
         if parsed.get("warning"):
             print(f"[PDF解析提示] {parsed['warning']}")
-        return parsed.get("text", "")
+            _last_parse_error = parsed["warning"]
+        text = parsed.get("text", "")
+        if not text.strip():
+            # 无文本（扫描件/图片型PDF等）：给用户明确提示
+            if not _last_parse_error:
+                _last_parse_error = "PDF 中未提取到任何文字，可能是扫描件/图片型 PDF（没有文字层）"
+            return ""
+        return text
     except Exception as e:
+        _last_parse_error = f"文件解析异常：{e}"
         print(f"[文件解析失败] {e}")
         return ""
 
@@ -67,7 +87,8 @@ def run_review_ui(paper_content: str):
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
     if not paper_content or not paper_content.strip():
-        yield "请先上传论文文件（PDF / TXT / MD）！若已上传但提示此信息，可能是文件解析失败（PDF 需安装 PyPDF2），请查看运行控制台的诊断日志。", "", "", "", "", "", "", None, "❌ 未获取到论文内容，请先上传文件或检查解析依赖"
+        reason = _last_parse_error if _last_parse_error else "未上传文件或文件解析失败"
+        yield f"❌ 未获取到论文内容。原因：{reason}。若是扫描件/图片型 PDF，请先转成可复制文字的 PDF（或用 OCR 工具提取文本）后再上传。", "", "", "", "", "", "", None, "❌ 未获取到论文内容"
         return
 
     # 先yield一次，显示"正在审稿"提示（不带百分比，因为同步执行无法实时更新进度）
