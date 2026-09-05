@@ -550,6 +550,45 @@ def _fix_empty_defects(review_text: str) -> str:
     return new_review
 
 
+def _fix_empty_suggestions(review_text: str) -> str:
+    """
+    后处理：当"具体修改建议"为空时（LLM未输出，或幻觉过滤删光全部建议条目），
+    根据主要缺陷条目生成对应的通用建议，避免该区留空。
+    建议文本基于缺陷问题本身保守改写，不编造新事实。
+    """
+    # 定位"具体修改建议"区：标题后直接是空白（到下一个**标题或结尾）
+    match_empty = re.search(
+        r'\*\*具体修改建议\*\*[：:]\s*\n(\s*)(?=\n\*\*[^*]+\*\*[：:]|\Z)',
+        review_text
+    )
+    if not match_empty:
+        return review_text
+
+    # 从主要缺陷提取条目
+    match_defects = re.search(r'\*\*主要缺陷\*\*[：:]\s*\n(.*?)(?=\n\*\*具体修改建议\*\*)', review_text, re.DOTALL)
+    if not match_defects:
+        return review_text
+
+    items = re.findall(r'^\d+\.\s+(.*)$', match_defects.group(1), re.M)
+    items = [re.sub(r'[。；;，,]+$', '', i) for i in items if i.strip()]
+    if not items:
+        return review_text
+
+    lines = []
+    for i, item in enumerate(items, 1):
+        # "论文存在X的问题，需要针对性完善。" → "针对X的问题……"（提取问题描述）
+        prob = re.sub(r'^论文存在(.*?)的问题(?:，需要针对性完善)?$', r'\1', item)
+        prob = prob.strip('。；;，,')
+        if prob:
+            lines.append(f"{i}. 建议针对{prob}的问题进行深入分析与针对性修改，使论述更加充分、具体。")
+    if not lines:
+        return review_text
+
+    new_sugg = '\n'.join(lines)
+    print(f"[后处理] 具体修改建议为空，已根据主要缺陷生成{len(lines)}条通用建议")
+    return review_text[:match_empty.start(1)] + new_sugg + review_text[match_empty.end(1):]
+
+
 # ===== 论文结构解析节点 =====
 
 def node_paper_structure(state: ReviewState) -> ReviewState:
@@ -590,6 +629,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = _fix_no_defect_deduction(review)
     # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
     review = _fix_empty_defects(review)
+    # 后处理：具体修改建议为空时根据主要缺陷生成通用建议
+    review = _fix_empty_suggestions(review)
     print("[审稿] 创新性审稿完成")
     return {
         "innovation_review": review,
@@ -620,6 +661,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = _fix_no_defect_deduction(review)
     # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
     review = _fix_empty_defects(review)
+    # 后处理：具体修改建议为空时根据主要缺陷生成通用建议
+    review = _fix_empty_suggestions(review)
     print("[审稿] 方法论审稿完成")
     return {
         "methodology_review": review,
@@ -650,6 +693,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = _fix_no_defect_deduction(review)
     # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
     review = _fix_empty_defects(review)
+    # 后处理：具体修改建议为空时根据主要缺陷生成通用建议
+    review = _fix_empty_suggestions(review)
     print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
@@ -680,6 +725,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = _fix_no_defect_deduction(review)
     # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
     review = _fix_empty_defects(review)
+    # 后处理：具体修改建议为空时根据主要缺陷生成通用建议
+    review = _fix_empty_suggestions(review)
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,
