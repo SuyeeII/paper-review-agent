@@ -406,8 +406,16 @@ def _fix_no_defect_deduction(review_text: str) -> str:
     后处理：当审稿人"主要缺陷"为"（本维度未发现明显问题）"时，
     "扣分说明"不应再列扣分理由（否则自相矛盾：没缺陷却扣分）。
     此时把扣分说明改为与"未发现明显缺陷"一致的表述。
+    注意：只检查"主要缺陷"部分，不能全文判断（"具体修改建议"里的"未发现明显问题"不触发）。
     """
-    if '未发现明显问题' not in review_text:
+    # 定位"主要缺陷"部分的内容（到下一个**标题或文本结束）
+    match_defects = re.search(r'\*\*主要缺陷\*\*[：:]\s*\n(.*?)(\n\*\*[^\*]+\*\*[：:]|\Z)', review_text, re.DOTALL)
+    if not match_defects:
+        return review_text
+
+    defects_content = match_defects.group(1)
+    # 只有主要缺陷部分显示"未发现明显问题"才触发
+    if '未发现明显问题' not in defects_content:
         return review_text
 
     # 定位扣分说明部分：**扣分说明**：...（到下一个**或文本结束）
@@ -423,6 +431,57 @@ def _fix_no_defect_deduction(review_text: str) -> str:
     new_content = '该维度未发现明显缺陷，评分主要基于整体表现的进一步提升空间。'
     new_review = review_text[:match.start()] + prefix + new_content + suffix + review_text[match.end():]
     print("[后处理] 主要缺陷为'未发现明显问题'但扣分说明列了扣分理由，已统一口径")
+    return new_review
+
+
+def _fix_empty_defects(review_text: str) -> str:
+    """
+    后处理：当审稿人"主要缺陷"部分为空（LLM漏输出或输出不完整）时，
+    从"扣分说明"中提取扣分项补全为缺陷条目，避免"缺陷为空但扣分"的报告残缺。
+    扣分说明中的短语（如"相关工作对比不足、技术贡献有限"）本身是完整的名词短语，
+    可直接转成缺陷条目，不编造额外细节。
+    """
+    # 检查"主要缺陷"是否为空白（标题后直接到下一个标题，中间无任何内容）
+    match_empty = re.search(
+        r'\*\*主要缺陷\*\*[：:]\s*\n(\s*)\*\*具体修改建议\*\*[：:]',
+        review_text
+    )
+    if not match_empty:
+        return review_text
+
+    # 从扣分说明提取扣分项
+    match_deduction = re.search(r'\*\*扣分说明\*\*[：:]\s*(.*?)(\n(?=\*\*)|\Z)', review_text, re.DOTALL)
+    if not match_deduction:
+        return review_text
+
+    deduction = match_deduction.group(1).strip()
+    # 去掉常见前缀词
+    deduction = re.sub(r'^(主要)?扣分项?为|扣分主要因为|主要因为|扣分原因|因为', '', deduction)
+    deduction = deduction.strip('：:。；;，,')
+
+    if not deduction:
+        return review_text
+
+    # 按顿号/逗号/分号拆分扣分项短语
+    items = [s.strip() for s in re.split(r'[、，,；;]', deduction) if s.strip()]
+    if not items:
+        return review_text
+
+    # 生成缺陷条目（用扣分项短语本身，不编造细节）
+    lines = []
+    for i, item in enumerate(items, 1):
+        item_clean = re.sub(r'[。；;，,]+$', '', item)
+        lines.append(f"{i}. 论文存在{item_clean}的问题，需要针对性完善。")
+    new_defects = '\n'.join(lines)
+
+    new_review = (
+        review_text[:match_empty.start()]
+        + '**主要缺陷**：\n'
+        + new_defects
+        + '\n**具体修改建议**：'
+        + review_text[match_empty.end():]
+    )
+    print(f"[后处理] 主要缺陷为空，已从扣分说明提取{len(items)}条扣分项补全")
     return new_review
 
 
@@ -462,6 +521,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = _deduplicate_repeated_sentences(review)
     # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
     review = _fix_no_defect_deduction(review)
+    # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
+    review = _fix_empty_defects(review)
     print("[审稿] 创新性审稿完成")
     return {
         "innovation_review": review,
@@ -488,6 +549,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = _deduplicate_repeated_sentences(review)
     # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
     review = _fix_no_defect_deduction(review)
+    # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
+    review = _fix_empty_defects(review)
     print("[审稿] 方法论审稿完成")
     return {
         "methodology_review": review,
@@ -514,6 +577,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = _deduplicate_repeated_sentences(review)
     # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
     review = _fix_no_defect_deduction(review)
+    # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
+    review = _fix_empty_defects(review)
     print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
@@ -542,6 +607,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = _fix_writing_review_overall(review)
     # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
     review = _fix_no_defect_deduction(review)
+    # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
+    review = _fix_empty_defects(review)
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,
