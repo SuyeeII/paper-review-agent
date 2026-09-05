@@ -352,6 +352,55 @@ def _deduplicate_repeated_sentences(review_text: str) -> str:
     return result
 
 
+def _fix_writing_review_overall(review_text: str) -> str:
+    """
+    后处理：写作表达审稿人的"总体评价"若出现创新维度专属措辞（弱模型复读其他审稿人的评价），删除该短语。
+    写作审稿人只应评语言表达，不该评"创新点不够突出""创新性不足"等创新维度内容。
+    """
+    match = re.search(r'(\*\*总体评价\*\*[：:]\s*\d+\s*/\s*10[，,]\s*)(.*)', review_text)
+    if not match:
+        return review_text
+
+    prefix, overall = match.group(1), match.group(2)
+
+    # 创新维度专属措辞（这些词属于创新性审稿人的评价范围）
+    cross_patterns = [
+        r'创新点不够突出',
+        r'创新性不足',
+        r'创新性有待提高',
+        r'创新性有待加强',
+        r'新颖性不足',
+        r'缺乏创新性',
+        r'创新贡献有限',
+        r'创新性不够',
+    ]
+
+    changed = False
+    for p in cross_patterns:
+        if re.search(p, overall):
+            # 先整体删除"转折词+跨维度短语"组合（如"但创新点不够突出"），避免残留"但"
+            overall = re.sub(r'[，,、；;]?\s*(但|但是|然而|不过|而)\s*' + p, '', overall)
+            # 再删除孤立出现的跨维度短语
+            overall = re.sub(p, '', overall)
+            changed = True
+
+    if not changed:
+        return review_text
+
+    # 清理删除后可能残留的标点和悬空转折词（如"但。"、"然而，"）
+    overall = re.sub(r'[，,、；;]+', '，', overall)
+    overall = re.sub(r'[，,、；;]?\s*(但|但是|然而|不过|而)\s*$', '', overall)
+    overall = overall.strip('，。;；,')
+    if overall:
+        overall += '。'
+    else:
+        overall = '论文整体结构完整，表达基本流畅。'
+
+    new_review = review_text[:match.start()] + prefix + overall + review_text[match.end():]
+    print("[后处理] 写作审稿人总体评价出现创新维度措辞，已清理")
+    return new_review
+
+
 # ===== 论文结构解析节点 =====
 
 def node_paper_structure(state: ReviewState) -> ReviewState:
@@ -458,6 +507,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = _clean_placeholder_brackets(review)
     # 后处理：去掉LLM输出的整句重复内容
     review = _deduplicate_repeated_sentences(review)
+    # 后处理：写作审稿人总体评价若出现创新维度措辞（复读其他审稿人），清理
+    review = _fix_writing_review_overall(review)
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,
