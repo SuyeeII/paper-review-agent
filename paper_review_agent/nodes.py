@@ -123,6 +123,67 @@ HALLUCINATION_METHOD_KEYWORDS = [
 ]
 
 
+def _normalize_text(s: str) -> str:
+    """规范化文本用于模糊匹配：去掉空格、连字符、下划线等噪声（PDF提取常见），转小写"""
+    return re.sub(r'[\s\-_]+', '', s).lower()
+
+
+def _filter_structure_hallucinated_refs(structure_text: str, paper_content: str) -> str:
+    """
+    后处理：过滤论文结构解析中幻觉的方法名。
+    主要针对"代表性参考文献"部分：LLM 有时会编造论文中不存在的经典文献
+    （如给芦笋论文编造 Faster R-CNN 的参考文献）。
+    如果某条参考文献里出现论文内容中不存在的方法名，删除该条。
+    """
+    if not structure_text or not paper_content:
+        return structure_text
+
+    # 找出论文内容里实际存在的方法名称（规范化匹配，避免PDF提取空格噪声干扰）
+    paper_norm = _normalize_text(paper_content)
+    paper_methods = set()
+    for method in HALLUCINATION_METHOD_KEYWORDS:
+        if _normalize_text(method) in paper_norm:
+            paper_methods.add(_normalize_text(method))
+
+    # 找出结构解析里出现但论文里没有的方法名称（幻觉）
+    structure_norm = _normalize_text(structure_text)
+    hallucinated = [m for m in HALLUCINATION_METHOD_KEYWORDS
+                    if _normalize_text(m) in structure_norm and _normalize_text(m) not in paper_methods]
+    if not hallucinated:
+        return structure_text
+
+    # 定位"代表性参考文献"区块
+    ref_marker = re.search(r'(\*\*代表性参考文献\*\*[：:]?\s*\n?)(.*)', structure_text, re.DOTALL)
+    if not ref_marker:
+        return structure_text
+
+    ref_section = ref_marker.group(2)
+    # 参考文献区块到下一个 ##/### 或结尾
+    ref_block = re.match(r'(.*?)(?=\n##|\n###|\Z)', ref_section, re.DOTALL)
+    if not ref_block:
+        return structure_text
+
+    block_text = ref_block.group(1)
+    # 逐条处理参考文献（每行一条，以 - 开头）
+    lines = block_text.split('\n')
+    filtered_lines = []
+    removed = 0
+    for line in lines:
+        line_norm = _normalize_text(line)
+        if line.strip().startswith('-') and any(_normalize_text(m) in line_norm for m in hallucinated):
+            removed += 1
+            continue
+        filtered_lines.append(line)
+
+    if removed == 0:
+        return structure_text
+
+    new_block = '\n'.join(filtered_lines)
+    new_structure = structure_text[:ref_marker.start(2)] + block_text.replace(block_text, new_block) + structure_text[ref_marker.end(2):]
+    print(f"[幻觉检测] 结构解析：过滤了 {removed} 条包含幻觉方法名 {hallucinated} 的参考文献")
+    return new_structure
+
+
 def _filter_hallucinated_methods(review_content: str, paper_content: str, dimension: str) -> str:
     """
     检测并过滤审稿意见里幻觉的方法名称
@@ -132,16 +193,18 @@ def _filter_hallucinated_methods(review_content: str, paper_content: str, dimens
     if not paper_content or not review_content:
         return review_content
 
-    # 找出论文内容里实际存在的方法名称
+    # 找出论文内容里实际存在的方法名称（规范化匹配，避免PDF提取空格噪声干扰）
+    paper_norm = _normalize_text(paper_content)
     paper_methods = set()
     for method in HALLUCINATION_METHOD_KEYWORDS:
-        if method in paper_content:
-            paper_methods.add(method.lower())
+        if _normalize_text(method) in paper_norm:
+            paper_methods.add(_normalize_text(method))
 
     # 找出审稿意见里出现但论文里没有的方法名称（幻觉）
+    review_norm = _normalize_text(review_content)
     hallucinated_methods = []
     for method in HALLUCINATION_METHOD_KEYWORDS:
-        if method in review_content and method.lower() not in paper_methods:
+        if _normalize_text(method) in review_norm and _normalize_text(method) not in paper_methods:
             hallucinated_methods.append(method)
 
     if not hallucinated_methods:
@@ -156,7 +219,8 @@ def _filter_hallucinated_methods(review_content: str, paper_content: str, dimens
         filtered_items = []
         removed_count = 0
         for item in items:
-            if any(method in item for method in hallucinated_methods):
+            item_norm = _normalize_text(item)
+            if any(_normalize_text(method) in item_norm for method in hallucinated_methods):
                 removed_count += 1
                 continue
             filtered_items.append(item)
@@ -354,8 +418,9 @@ def _deduplicate_repeated_sentences(review_text: str) -> str:
 
 def _fix_writing_review_overall(review_text: str) -> str:
     """
-    后处理：写作表达审稿人的"总体评价"若出现创新维度专属措辞（弱模型复读其他审稿人的评价），删除该短语。
-    写作审稿人只应评语言表达，不该评"创新点不够突出""创新性不足"等创新维度内容。
+    后处理：非创新性审稿人（写作表达/方法论/论证与证据）的"总体评价"若出现创新维度专属措辞
+    （弱模型复读其他审稿人的评价），删除该短语。
+    这些审稿人只应评各自维度，不该评"创新点不够突出""创新性不足"等创新维度内容。
     """
     match = re.search(r'(\*\*总体评价\*\*[：:]\s*\d+\s*/\s*10[，,]\s*)(.*)', review_text)
     if not match:
@@ -397,7 +462,7 @@ def _fix_writing_review_overall(review_text: str) -> str:
         overall = '论文整体结构完整，表达基本流畅。'
 
     new_review = review_text[:match.start()] + prefix + overall + review_text[match.end():]
-    print("[后处理] 写作审稿人总体评价出现创新维度措辞，已清理")
+    print("[后处理] 审稿人总体评价出现创新维度措辞，已清理")
     return new_review
 
 
@@ -491,8 +556,10 @@ def node_paper_structure(state: ReviewState) -> ReviewState:
     """解析论文结构，提取各部分核心内容，为分部分评审提供依据"""
     llm = get_llm()
     prompt = get_paper_structure_prompt(state["topic"])
-    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2)
+    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2, max_tokens=3000)
     print("[结构解析] 论文结构解析完成")
+    # 后处理：过滤结构解析中幻觉的方法名（如参考文献里编造论文中不存在的方法）
+    structure = _filter_structure_hallucinated_refs(structure, state["topic"])
     # 只返回修改的字段，full_transcript返回要追加的内容（用operator.add合并）
     return {
         "paper_structure": structure,
@@ -510,7 +577,7 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     """创新性审稿人"""
     llm = get_llm()
     prompt = get_innovation_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。")
+    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。", max_tokens=2000)
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "innovation")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -538,7 +605,7 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     """方法论审稿人"""
     llm = get_llm()
     prompt = get_methodology_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。")
+    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。", max_tokens=2000)
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "methodology")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -547,6 +614,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = _clean_placeholder_brackets(review)
     # 后处理：去掉LLM输出的整句重复内容
     review = _deduplicate_repeated_sentences(review)
+    # 后处理：方法论审稿人总体评价若出现创新维度措辞（复读其他审稿人），清理
+    review = _fix_writing_review_overall(review)
     # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
     review = _fix_no_defect_deduction(review)
     # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
@@ -566,7 +635,7 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     """论证与证据审稿人"""
     llm = get_llm()
     prompt = get_experiment_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文论证与证据审稿人，擅长评估论证是否充分、证据是否可靠、结论是否有充分支撑（适用于所有学科，包括理工科的实验数据、文科的案例分析、理论研究的逻辑推导等）。")
+    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文论证与证据审稿人，擅长评估论证是否充分、证据是否可靠、结论是否有充分支撑（适用于所有学科，包括理工科的实验数据、文科的案例分析、理论研究的逻辑推导等）。", max_tokens=2000)
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "experiment")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -575,6 +644,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = _clean_placeholder_brackets(review)
     # 后处理：去掉LLM输出的整句重复内容
     review = _deduplicate_repeated_sentences(review)
+    # 后处理：论证与证据审稿人总体评价若出现创新维度措辞（复读其他审稿人），清理
+    review = _fix_writing_review_overall(review)
     # 后处理：主要缺陷为"未发现明显问题"时统一扣分说明口径
     review = _fix_no_defect_deduction(review)
     # 后处理：主要缺陷为空时从扣分说明提取扣分项补全
@@ -594,7 +665,7 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     """写作审稿人"""
     llm = get_llm()
     prompt = get_writing_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。")
+    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。", max_tokens=2000)
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "writing")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -1112,7 +1183,7 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
 
     llm = get_llm()
     prompt = get_editor_summary_prompt(state["topic"], innovation, methodology, experiment, writing)
-    summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3)
+    summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3, max_tokens=2000)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
     # 后处理：主编表格评分必须与初审审稿人评分一致（LLM可能擅自修改各维度分数）

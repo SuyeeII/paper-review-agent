@@ -20,6 +20,18 @@ sys.path.insert(0, _SCRIPT_DIR)
 
 from paper_review_agent.graph import run_review, format_review_result
 
+# 复用 nodes.py 里的幻觉方法名列表，做独立断言（nodes过滤后是否有残留）
+from paper_review_agent.nodes import HALLUCINATION_METHOD_KEYWORDS
+
+# 幻觉断言只针对"具体方法名"（论文没引用而出现=编造）；
+# "深度学习/机器学习"这类通用类别词是合理技术描述，不当作幻觉（避免误报）
+GENERIC_METHOD_WORDS = {
+    "CNN", "RNN", "Transformer", "BERT", "GPT", "SVM",
+    "随机森林", "决策树", "贝叶斯", "马尔可夫", "蒙特卡洛",
+    "强化学习", "深度学习", "机器学习",
+}
+SPECIFIC_METHOD_KEYWORDS = [m for m in HALLUCINATION_METHOD_KEYWORDS if m not in GENERIC_METHOD_WORDS]
+
 try:
     from PyPDF2 import PdfReader
     HAS_PYPDF2 = True
@@ -105,12 +117,54 @@ def check_review_quality(review: str, dimension: str, results: list) -> None:
         if '未发现明显问题' in m_defects.group(1) and '未发现' not in m_deduction.group(1):
             results.append(f"  ❌ {dimension}审稿人：缺陷说'未发现问题'但扣分说明列了扣分理由")
 
+    # 检查评分范围（1-10）
+    m_score = re.search(r'\*\*总体评价\*\*[：:]\s*(\d+)/10', review)
+    if m_score:
+        score = int(m_score.group(1))
+        if not (1 <= score <= 10):
+            results.append(f"  ❌ {dimension}审稿人：评分超出范围 {score}/10")
+    else:
+        results.append(f"  ❌ {dimension}审稿人：总体评价缺少 X/10 分数")
+
+    # 检查缺陷/建议条数一致性（缺陷有编号1.2.3.，建议也应该有）
+    # 注意：当缺陷/建议为"（本维度未发现明显问题）"时无编号是正常的，跳过
+    defects_start = review.find('**主要缺陷**')
+    suggestions_start = review.find('**具体修改建议**')
+    defects_section = review[defects_start:suggestions_start] if suggestions_start > defects_start >= 0 else ''
+    suggestions_section = review[suggestions_start:] if suggestions_start >= 0 else ''
+    n_defects = len(re.findall(r'^\d+\.\s', defects_section, re.M))
+    n_suggestions = len(re.findall(r'^\d+\.\s', suggestions_section, re.M))
+    if n_defects == 0 and '未发现明显问题' not in defects_section:
+        results.append(f"  ❌ {dimension}审稿人：主要缺陷无编号条目")
+    if n_suggestions == 0 and '未发现明显问题' not in suggestions_section:
+        results.append(f"  ❌ {dimension}审稿人：具体修改建议无编号条目")
+
     # 检查写作审稿人维度越界（总体评价提到创新点）
     if dimension == '写作表达':
         m_overall = re.search(r'\*\*总体评价\*\*[：:]\s*(\d+)/10[，,]\s*(.*)', review)
         if m_overall:
             if re.search(r'创新点不够突出|创新性不足|新颖性不足', m_overall.group(2)):
                 results.append(f"  ❌ {dimension}审稿人：总体评价出现创新维度措辞（维度越界）")
+
+
+def _normalize(s: str) -> str:
+    """规范化：去空格/连字符/下划线噪声，转小写（PDF提取常见）"""
+    return re.sub(r'[\s\-_]+', '', s).lower()
+
+
+def check_hallucination_residual(paper_text: str, full_report: str, results: list) -> None:
+    """独立检查：最终报告里是否残留论文中不存在的具体方法名（幻觉）
+    规范化匹配：PDF 提取文本可能有空格噪声（如 "Faster R -CNN"），需去噪后比较"""
+    if not paper_text or not full_report:
+        return
+    paper_norm = _normalize(paper_text)
+    report_norm = _normalize(full_report)
+    for method in SPECIFIC_METHOD_KEYWORDS:
+        method_norm = _normalize(method)
+        if method_norm in paper_norm:
+            continue  # 论文里真实存在（含提取噪声变体），不算幻觉
+        if method_norm in report_norm:
+            results.append(f"  ❌ 幻觉残留：报告中出现论文中不存在的方法名 '{method}'")
 
 
 def check_editor_quality(state: dict, results: list) -> None:
@@ -153,15 +207,47 @@ def check_editor_quality(state: dict, results: list) -> None:
             for dim in review_scores:
                 if review_scores[dim] != editor_scores.get(dim):
                     results.append(f"  ❌ 主编评分与初审不一致：{dim} 初审{review_scores[dim]} vs 主编{editor_scores.get(dim)}")
+                score = editor_scores.get(dim, 0)
+                if not (1 <= score <= 10):
+                    results.append(f"  ❌ 主编{dim}评分超出范围: {score}")
             # 总分校验
             total = sum(review_scores.values())
             m_total = re.search(r'\*\*综合评分\*\*\s*\|\s*\*\*(\d+)/40', summary)
-            if m_total and int(m_total.group(1)) != total:
-                results.append(f"  ❌ 主编综合评分错误：应为{total}，实际{m_total.group(1)}")
+            if m_total:
+                if int(m_total.group(1)) != total:
+                    results.append(f"  ❌ 主编综合评分错误：应为{total}，实际{m_total.group(1)}")
+            else:
+                results.append("  ❌ 主编：缺少综合评分（X/40）")
         else:
             results.append("  ❌ 主编：评分表格解析失败")
     else:
         results.append(f"  ⚠️ 初审评分提取不全（{len(review_scores)}/4），跳过主编评分对齐检查")
+
+    # 检查修改建议清单格式（每条带【必须修改】/【建议修改】+ 编号）
+    m_sugg_section = re.search(r'## 五、修改建议清单.*?(?=## 六、)', summary, re.DOTALL)
+    if m_sugg_section:
+        sugg_text = m_sugg_section.group(0)
+        numbered_items = re.findall(r'^(\d+)\.\s+(\*\*【(必须|建议|可选)修改】\*\*|【(必须|建议|可选)修改】)', sugg_text, re.M)
+        if not numbered_items:
+            results.append("  ❌ 主编：修改建议清单缺少'【必须/建议修改】'编号条目")
+        else:
+            # 校验编号连续
+            nums = [int(n) for n, *_ in numbered_items]
+            if nums != list(range(1, len(nums) + 1)):
+                results.append(f"  ❌ 主编：修改建议编号不连续 {nums}")
+    else:
+        results.append("  ❌ 主编：缺少修改建议清单")
+
+    # 检查最终结论（格式：## 六、最终结论 标题 + 下一行 **小修**，或同行的 **最终结论**：小修）
+    m_conclusion = re.search(r'##\s*六、最终结论\s*\n\s*\*{0,2}([^*\n]+?)\*{0,2}\s*\n', summary)
+    if not m_conclusion:
+        m_conclusion = re.search(r'\*\*最终结论\*\*[：:]\s*\*{0,2}([^*\n]+)', summary)
+    if m_conclusion:
+        conclusion = m_conclusion.group(1).strip()
+        if not re.search(r'小修|大修|录用|拒稿|修改后录用|修改', conclusion):
+            results.append(f"  ❌ 主编：最终结论异常：'{conclusion}'")
+    else:
+        results.append("  ❌ 主编：缺少最终结论")
 
 
 def check_structure_quality(state: dict, results: list) -> None:
@@ -170,9 +256,11 @@ def check_structure_quality(state: dict, results: list) -> None:
     if not structure:
         results.append("  ❌ 结构解析：输出为空")
         return
-    for section in ["## 论文基本信息", "### 1. 引言", "### 6. 参考文献"]:
+    for section in ["## 论文基本信息", "### 1. 引言"]:
         if section not in structure:
             results.append(f"  ❌ 结构解析：缺少{section}")
+    if '参考文献' not in structure:
+        results.append("  ❌ 结构解析：缺少参考文献部分")
     # 检查占位符
     for pattern in PLACEHOLDER_PATTERNS:
         if re.search(pattern, structure):
@@ -192,12 +280,22 @@ def run_single_paper(paper_path: str) -> dict:
     state = run_review(paper_text)
     results = []
 
+    # 生成完整报告并保存（供人工复核）
+    full_report = format_review_result(state)
+    reports_dir = os.path.join(_SCRIPT_DIR, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    report_name = os.path.splitext(name)[0] + ".md"
+    with open(os.path.join(reports_dir, report_name), "w", encoding="utf-8") as f:
+        f.write(full_report)
+
     # 检查各环节
     check_structure_quality(state, results)
     for dim, key in [("创新性", "innovation_review"), ("方法论", "methodology_review"),
                      ("论证与证据", "experiment_review"), ("写作表达", "writing_review")]:
         check_review_quality(state.get(key) or "", dim, results)
     check_editor_quality(state, results)
+    # 幻觉方法名残留独立检查（覆盖4审稿人+主编全文）
+    check_hallucination_residual(paper_text, full_report, results)
 
     # 输出结果
     if results:

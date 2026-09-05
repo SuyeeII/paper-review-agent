@@ -47,15 +47,17 @@ class LLMClient:
 
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
 
-    def _call_with_retry(self, messages: List[dict], temperature: float = None) -> str:
+    def _call_with_retry(self, messages: List[dict], temperature: float = None, max_tokens: int = None) -> str:
         """
         带指数退避重试的 LLM 调用
         遇到网络错误、超时、限流时自动重试，最多 max_retries 次
         等待时间：1s → 2s → 4s（指数退避）
         新增：内存缓存机制，相同的messages+temperature直接返回缓存结果
         """
+        if max_tokens is None:
+            max_tokens = self.max_tokens
         # 生成缓存key：基于messages的内容和temperature
-        cache_key_content = str(messages) + str(temperature if temperature is not None else self.temperature)
+        cache_key_content = str(messages) + str(temperature if temperature is not None else self.temperature) + str(max_tokens)
         cache_key = hashlib.md5(cache_key_content.encode('utf-8')).hexdigest()
 
         # 检查缓存
@@ -70,7 +72,7 @@ class LLMClient:
                     model=self.model,
                     messages=messages,
                     temperature=temperature if temperature is not None else self.temperature,
-                    max_tokens=self.max_tokens,
+                    max_tokens=max_tokens,
                 )
                 result = response.choices[0].message.content.strip()
 
@@ -92,16 +94,17 @@ class LLMClient:
         # 所有重试都失败，抛出最后一次的错误
         raise last_error
 
-    def chat(self, prompt: str, system_prompt: str = "你是一个专业的辩论赛选手。", temperature: float = None) -> str:
+    def chat(self, prompt: str, system_prompt: str = "你是一个专业的辩论赛选手。", temperature: float = None, max_tokens: int = None) -> str:
         """
         单次对话调用（带重试）
         返回模型生成的文本
+        max_tokens: 覆盖实例默认值（长输出场景如论文结构解析可传更大值）
         """
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
         ]
-        return self._call_with_retry(messages, temperature)
+        return self._call_with_retry(messages, temperature, max_tokens)
 
     def chat_with_history(self, messages: List[dict], temperature: float = None) -> str:
         """
