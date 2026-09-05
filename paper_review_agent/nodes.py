@@ -13,6 +13,7 @@ from paper_review_agent.prompts import (
     get_writing_review_prompt,
     get_reflection_prompt,
     get_editor_summary_prompt,
+    _clean_placeholder_brackets,
 )
 
 
@@ -335,6 +336,8 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     review = filter_cross_dimension_issues(review, "innovation")
     # 后处理过滤：检测并过滤幻觉的方法名称
     review = _filter_hallucinated_methods(review, state["topic"], "创新性")
+    # 后处理过滤：清理输出格式占位符括号残留
+    review = _clean_placeholder_brackets(review)
     print("[审稿] 创新性审稿完成")
     return {
         "innovation_review": review,
@@ -355,6 +358,8 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     review = filter_cross_dimension_issues(review, "methodology")
     # 后处理过滤：检测并过滤幻觉的方法名称
     review = _filter_hallucinated_methods(review, state["topic"], "方法论")
+    # 后处理过滤：清理输出格式占位符括号残留
+    review = _clean_placeholder_brackets(review)
     print("[审稿] 方法论审稿完成")
     return {
         "methodology_review": review,
@@ -375,6 +380,8 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     review = filter_cross_dimension_issues(review, "experiment")
     # 后处理过滤：检测并过滤幻觉的方法名称
     review = _filter_hallucinated_methods(review, state["topic"], "论证与证据")
+    # 后处理过滤：清理输出格式占位符括号残留
+    review = _clean_placeholder_brackets(review)
     print("[审稿] 论证与证据审稿完成")
     return {
         "experiment_review": review,
@@ -395,6 +402,8 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     review = filter_cross_dimension_issues(review, "writing")
     # 后处理过滤：检测并过滤幻觉的方法名称
     review = _filter_hallucinated_methods(review, state["topic"], "写作表达")
+    # 后处理过滤：清理输出格式占位符括号残留
+    review = _clean_placeholder_brackets(review)
     print("[审稿] 写作审稿完成")
     return {
         "writing_review": review,
@@ -862,6 +871,8 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
             placeholder_replaced = True
     if placeholder_replaced:
         print("[后处理] 主编报告：替换了LLM未替换的占位符")
+    # 后处理：清理输出格式占位符括号残留（如"（论文的哪一部分）"等）
+    summary = _clean_placeholder_brackets(summary)
     print("[汇总] 主编综合审稿报告完成")
     return {
         "editor_summary": summary,
