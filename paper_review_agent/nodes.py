@@ -589,13 +589,42 @@ def _fix_empty_suggestions(review_text: str) -> str:
     return review_text[:match_empty.start(1)] + new_sugg + review_text[match_empty.end(1):]
 
 
+def _chat_with_quality_retry(llm, prompt: str, system_prompt: str, max_tokens: int, dimension: str) -> str:
+    """
+    输出稳定性增强：低温度 + 固定seed + 结构校验重试
+    - temperature=0.3（降随机性）、seed=42（固定随机种子，模型支持时生效）
+    - 校验关键结构（主要缺陷/具体修改建议必须存在），缺失时带修正提示重试一次
+    """
+    for attempt in range(2):
+        review = llm.chat(
+            prompt,
+            system_prompt=system_prompt,
+            temperature=0.3,
+            max_tokens=max_tokens,
+            seed=42,
+        )
+        has_defect = bool(re.search(r'\*\*主要缺陷\*\*[：:]', review))
+        has_sugg = bool(re.search(r'\*\*具体修改建议\*\*[：:]', review))
+        if has_defect and has_sugg:
+            return review
+        if attempt == 0:
+            print(f"[质量重试] {dimension}审稿人输出结构不完整（主要缺陷={has_defect}，修改建议={has_sugg}），附加提示重新生成...")
+            prompt = prompt + "\n\n【重要修正提示】你上一次的输出缺少【主要缺陷】或【具体修改建议】部分。请重新完整输出五个部分：**总体评价**、**主要优点**、**主要缺陷**、**具体修改建议**、**扣分说明**，每部分都要有内容。"
+    return review
+
+
 # ===== 论文结构解析节点 =====
 
 def node_paper_structure(state: ReviewState) -> ReviewState:
     """解析论文结构，提取各部分核心内容，为分部分评审提供依据"""
     llm = get_llm()
-    prompt = get_paper_structure_prompt(state["topic"])
-    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2, max_tokens=3000)
+    prompt = get_paper_structure_prompt(
+        state["topic"],
+        tables_md=state.get("tables_md") or "",
+        images=state.get("images") or 0,
+        tables=state.get("tables") or 0,
+    )
+    structure = llm.chat(prompt, system_prompt="你是一位学术论文结构分析专家，擅长解析论文的各个部分并提取核心内容。", temperature=0.2, max_tokens=3000, seed=42)
     print("[结构解析] 论文结构解析完成")
     # 后处理：过滤结构解析中幻觉的方法名（如参考文献里编造论文中不存在的方法）
     structure = _filter_structure_hallucinated_refs(structure, state["topic"])
@@ -616,7 +645,7 @@ def node_innovation_review(state: ReviewState) -> ReviewState:
     """创新性审稿人"""
     llm = get_llm()
     prompt = get_innovation_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。", max_tokens=2000)
+    review = _chat_with_quality_retry(llm, prompt, "你是一位严谨的学术论文创新性审稿人，擅长评估论文的创新点、研究贡献和相关工作对比。", 2000, "创新性")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "innovation")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -646,7 +675,7 @@ def node_methodology_review(state: ReviewState) -> ReviewState:
     """方法论审稿人"""
     llm = get_llm()
     prompt = get_methodology_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。", max_tokens=2000)
+    review = _chat_with_quality_retry(llm, prompt, "你是一位严谨的学术论文方法论审稿人，擅长评估研究方法的合理性、理论推导的严谨性和技术路线的清晰度。", 2000, "方法论")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "methodology")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -678,7 +707,7 @@ def node_experiment_review(state: ReviewState) -> ReviewState:
     """论证与证据审稿人"""
     llm = get_llm()
     prompt = get_experiment_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文论证与证据审稿人，擅长评估论证是否充分、证据是否可靠、结论是否有充分支撑（适用于所有学科，包括理工科的实验数据、文科的案例分析、理论研究的逻辑推导等）。", max_tokens=2000)
+    review = _chat_with_quality_retry(llm, prompt, "你是一位严谨的学术论文论证与证据审稿人，擅长评估论证是否充分、证据是否可靠、结论是否有充分支撑（适用于所有学科，包括理工科的实验数据、文科的案例分析、理论研究的逻辑推导等）。", 2000, "论证与证据")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "experiment")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -710,7 +739,7 @@ def node_writing_review(state: ReviewState) -> ReviewState:
     """写作审稿人"""
     llm = get_llm()
     prompt = get_writing_review_prompt(state["topic"], state.get("paper_structure"))
-    review = llm.chat(prompt, system_prompt="你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。", max_tokens=2000)
+    review = _chat_with_quality_retry(llm, prompt, "你是一位严谨的学术论文写作审稿人，擅长评估论文结构、语言表达、图表规范和参考文献完整性。", 2000, "写作表达")
     # 后处理过滤：删掉越界的主要缺陷（第二层防护）
     review = filter_cross_dimension_issues(review, "writing")
     # 后处理过滤：检测并过滤幻觉的方法名称
@@ -1230,7 +1259,7 @@ def node_editor_summary(state: ReviewState) -> ReviewState:
 
     llm = get_llm()
     prompt = get_editor_summary_prompt(state["topic"], innovation, methodology, experiment, writing)
-    summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3, max_tokens=2000)
+    summary = llm.chat(prompt, system_prompt="你是一位资深的学术期刊领域主编（Area Chair），负责汇总多位审稿人的意见，给出最终的综合审稿报告和录用决定。", temperature=0.3, max_tokens=2000, seed=42)
     # 后处理：自动计算综合评分，替换掉LLM可能算错的加法
     summary = _fix_editor_total_score(summary)
     # 后处理：主编表格评分必须与初审审稿人评分一致（LLM可能擅自修改各维度分数）

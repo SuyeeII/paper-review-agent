@@ -1,28 +1,128 @@
 [
   {
     "paper": "“活人感”如何实现电影艺术疗愈？——以新大众文艺视域下的动画电影《牛来》为例_古珍晶.pdf",
-    "issues": []
+    "issues": [],
+    "metrics": {
+      "structure_missing": 0,
+      "review_section_missing": 0,
+      "editor_section_missing": 0,
+      "score_align_errors": 0,
+      "total_score_errors": 0,
+      "score_range_errors": 0,
+      "hallucination_count": 0,
+      "placeholder_count": 0,
+      "repeat_count": 0,
+      "empty_defects": 0,
+      "empty_suggestions": 0,
+      "defect_no_number": 0,
+      "suggestion_no_number": 0,
+      "no_conclusion": 0,
+      "cross_dimension_overall": 0
+    }
   },
   {
     "paper": "基于AI算法的无线通信机房空调节能优化设计与实现_李涛.pdf",
-    "issues": []
+    "issues": [],
+    "metrics": {
+      "structure_missing": 0,
+      "review_section_missing": 0,
+      "editor_section_missing": 0,
+      "score_align_errors": 0,
+      "total_score_errors": 0,
+      "score_range_errors": 0,
+      "hallucination_count": 0,
+      "placeholder_count": 0,
+      "repeat_count": 0,
+      "empty_defects": 0,
+      "empty_suggestions": 0,
+      "defect_no_number": 0,
+      "suggestion_no_number": 0,
+      "no_conclusion": 0,
+      "cross_dimension_overall": 0
+    }
   },
   {
     "paper": "基于YOLO11n的芦笋采收机器人多目标分割与识别定位_梁明旭.pdf",
-    "issues": [
-      "  ❌ 创新性审稿人：具体修改建议无编号条目"
-    ]
+    "issues": [],
+    "metrics": {
+      "structure_missing": 0,
+      "review_section_missing": 0,
+      "editor_section_missing": 0,
+      "score_align_errors": 0,
+      "total_score_errors": 0,
+      "score_range_errors": 0,
+      "hallucination_count": 0,
+      "placeholder_count": 0,
+      "repeat_count": 0,
+      "empty_defects": 0,
+      "empty_suggestions": 0,
+      "defect_no_number": 0,
+      "suggestion_no_number": 0,
+      "no_conclusion": 0,
+      "cross_dimension_overall": 0
+    }
   },
   {
     "paper": "基于YOLOv8n改进的杂草轻量检测算法_朱洪廷.pdf",
-    "issues": []
+    "issues": [],
+    "metrics": {
+      "structure_missing": 0,
+      "review_section_missing": 0,
+      "editor_section_missing": 0,
+      "score_align_errors": 0,
+      "total_score_errors": 0,
+      "score_range_errors": 0,
+      "hallucination_count": 0,
+      "placeholder_count": 0,
+      "repeat_count": 0,
+      "empty_defects": 0,
+      "empty_suggestions": 0,
+      "defect_no_number": 0,
+      "suggestion_no_number": 0,
+      "no_conclusion": 0,
+      "cross_dimension_overall": 0
+    }
   },
   {
     "paper": "我国刑事诉讼中的证据准入制度及其完善_艾明.pdf",
-    "issues": []
+    "issues": [],
+    "metrics": {
+      "structure_missing": 0,
+      "review_section_missing": 0,
+      "editor_section_missing": 0,
+      "score_align_errors": 0,
+      "total_score_errors": 0,
+      "score_range_errors": 0,
+      "hallucination_count": 0,
+      "placeholder_count": 0,
+      "repeat_count": 0,
+      "empty_defects": 0,
+      "empty_suggestions": 0,
+      "defect_no_number": 0,
+      "suggestion_no_number": 0,
+      "no_conclusion": 0,
+      "cross_dimension_overall": 0
+    }
   },
   {
     "paper": "教学关键要素改革视域下职业教育课程能力图谱构建研究_李洪建.pdf",
-    "issues": []
+    "issues": [],
+    "metrics": {
+      "structure_missing": 0,
+      "review_section_missing": 0,
+      "editor_section_missing": 0,
+      "score_align_errors": 0,
+      "total_score_errors": 0,
+      "score_range_errors": 0,
+      "hallucination_count": 0,
+      "placeholder_count": 0,
+      "repeat_count": 0,
+      "empty_defects": 0,
+      "empty_suggestions": 0,
+      "defect_no_number": 0,
+      "suggestion_no_number": 0,
+      "no_conclusion": 0,
+      "cross_dimension_overall": 0
+    }
   }
 ]

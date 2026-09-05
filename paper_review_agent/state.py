@@ -32,6 +32,11 @@ class ReviewState(TypedDict):
     # ===== 论文结构解析 =====
     paper_structure: Optional[str]       # 论文结构解析结果
 
+    # ===== PDF图表解析信息 =====
+    tables_md: Optional[str]             # 表格 Markdown 文本（pdfplumber 提取）
+    images: int                          # 图片数量
+    tables: int                          # 表格数量
+
     # ===== 系统 =====
     phase: ReviewPhase                   # 当前阶段
     error: Optional[str]                 # 错误信息
@@ -40,12 +45,18 @@ class ReviewState(TypedDict):
 
 def init_state(
     topic: str,
+    tables_md: str = "",
+    images: int = 0,
+    tables: int = 0,
 ) -> ReviewState:
     """
     初始化审稿状态
 
     Args:
         topic: 论文内容
+        tables_md: 表格 Markdown 文本（pdfplumber 提取，可为空）
+        images: PDF 中图片数量
+        tables: PDF 中表格数量
     """
     return {
         "topic": topic,
@@ -55,6 +66,9 @@ def init_state(
         "writing_review": None,
         "editor_summary": None,
         "paper_structure": None,
+        "tables_md": tables_md,
+        "images": images,
+        "tables": tables,
         "phase": ReviewPhase.REVIEWING,
         "error": None,
         "full_transcript": [],

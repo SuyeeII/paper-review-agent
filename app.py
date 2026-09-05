@@ -8,15 +8,13 @@ import tempfile
 import gradio as gr
 from paper_review_agent import run_review, format_review_result
 from paper_review_agent.state import ReviewState
+from paper_review_agent.pdf_parser import parse_paper_file
 
-try:
-    from PyPDF2 import PdfReader
-    HAS_PYPDF2 = True
-except ImportError:
-    HAS_PYPDF2 = False
+# 全局：最近一次上传文件的图表信息（tables_md/images/tables），审稿时透传
+_last_parse_meta = {"tables_md": "", "images": 0, "tables": 0}
 
 
-def parse_paper_file(file_obj) -> str:
+def parse_paper_file_ui(file_obj) -> str:
     """
     解析上传的论文文件，提取文本内容
     支持 PDF / TXT / MD
@@ -30,29 +28,20 @@ def parse_paper_file(file_obj) -> str:
     if not file_path or not os.path.exists(file_path):
         return ""
 
-    ext = os.path.splitext(file_path)[1].lower()
-
     try:
-        if ext == ".pdf":
-            if not HAS_PYPDF2:
-                return "⚠️ PDF 解析库未安装，请安装 PyPDF2 后重试，或直接粘贴论文文本。"
-            reader = PdfReader(file_path)
-            text_parts = []
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-            return "\n".join(text_parts)
-
-        elif ext in (".txt", ".md", ".markdown"):
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
-
-        else:
-            return f"⚠️ 不支持的文件格式：{ext}，请上传 PDF / TXT / MD 文件，或直接粘贴论文文本。"
-
+        parsed = parse_paper_file(file_path)
+        # 保存图表信息供审稿透传
+        _last_parse_meta["tables_md"] = parsed.get("tables_md", "")
+        _last_parse_meta["images"] = parsed.get("images", 0)
+        _last_parse_meta["tables"] = parsed.get("tables", 0)
+        if parsed.get("parser") == "pdfplumber":
+            print(f"[PDF解析] pdfplumber 提取文本 {len(parsed['text'])} 字符，表格 {parsed['tables']} 个，图片 {parsed['images']} 幅")
+        if parsed.get("warning"):
+            print(f"[PDF解析提示] {parsed['warning']}")
+        return parsed.get("text", "")
     except Exception as e:
-        return f"⚠️ 文件解析失败：{str(e)}，请尝试直接粘贴论文文本。"
+        print(f"[文件解析失败] {e}")
+        return ""
 
 
 def on_paper_file_upload(file_obj) -> str:
@@ -61,7 +50,7 @@ def on_paper_file_upload(file_obj) -> str:
     内容存在后台State里，不显示在界面上
     解析失败时返回空字符串（不把错误提示当论文内容），并在控制台打印原因
     """
-    parsed = parse_paper_file(file_obj)
+    parsed = parse_paper_file_ui(file_obj)
     if not parsed:
         return ""
     if parsed.startswith("⚠️"):
@@ -88,6 +77,9 @@ def run_review_ui(paper_content: str):
     try:
         final_state = run_review(
             topic=paper_content.strip(),
+            tables_md=_last_parse_meta.get("tables_md", ""),
+            images=_last_parse_meta.get("images", 0),
+            tables=_last_parse_meta.get("tables", 0),
         )
     except Exception as e:
         error_msg = str(e)
@@ -202,7 +194,7 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
     # 页脚
     gr.Markdown("""
     ---
-    <sub>**技术栈**：LangGraph（多Agent并行）· LangChain · OpenAI 兼容 API（智谱 GLM）· Gradio · PyPDF2</sub>
+    <sub>**技术栈**：LangGraph（多Agent并行）· LangChain · OpenAI 兼容 API（智谱 GLM）· Gradio · pdfplumber/PyPDF2</sub>
     """)
 
 

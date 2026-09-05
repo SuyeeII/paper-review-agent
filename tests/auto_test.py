@@ -32,31 +32,18 @@ GENERIC_METHOD_WORDS = {
 }
 SPECIFIC_METHOD_KEYWORDS = [m for m in HALLUCINATION_METHOD_KEYWORDS if m not in GENERIC_METHOD_WORDS]
 
-try:
-    from PyPDF2 import PdfReader
-    HAS_PYPDF2 = True
-except ImportError:
-    HAS_PYPDF2 = False
+from paper_review_agent.pdf_parser import parse_paper_file as _parse_with_parser
 
 
-def parse_paper(path: str) -> str:
-    """解析论文文件（PDF/TXT/MD），提取文本内容"""
-    ext = os.path.splitext(path)[1].lower()
-    if ext == ".pdf":
-        if not HAS_PYPDF2:
-            raise RuntimeError("PyPDF2 未安装，无法解析 PDF")
-        reader = PdfReader(path)
-        text_parts = []
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(page_text)
-        return "\n".join(text_parts)
-    elif ext in (".txt", ".md", ".markdown"):
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    else:
-        raise RuntimeError(f"不支持的文件格式：{ext}，仅支持 PDF / TXT / MD")
+def parse_paper(path: str) -> dict:
+    """
+    解析论文文件（PDF/TXT/MD），提取文本+表格+图表统计
+    返回: {text, tables_md, images, tables, parser, warning}
+    """
+    result = _parse_with_parser(path)
+    if not result.get("text") and result.get("warning"):
+        raise RuntimeError(f"解析失败：{result['warning']}")
+    return result
 
 # ===== 质量检查规则 =====
 
@@ -81,6 +68,198 @@ REPEAT_PATTERN = r'(.{12,}?[。！？!?])\1'
 
 # 3. 审稿意见结构完整性
 REQUIRED_SECTIONS = ["**总体评价**", "**主要优点**", "**主要缺陷**", "**具体修改建议**", "**扣分说明**"]
+
+
+def compute_metrics(state: dict, paper_text: str, full_report: str) -> dict:
+    """
+    系统质量评测指标计算（每篇论文）
+    返回结构化指标，供汇总评测报告使用
+    """
+    metrics = {
+        "structure_missing": 0,        # 结构解析必备部分缺失数
+        "review_section_missing": 0,   # 4审稿人必备部分缺失总数（5部分×4人=20）
+        "editor_section_missing": 0,   # 主编必备部分缺失数（5部分）
+        "score_align_errors": 0,       # 主编vs初审评分不一致数
+        "total_score_errors": 0,       # 主编总分算错数
+        "score_range_errors": 0,       # 评分超范围数
+        "hallucination_count": 0,      # 幻觉方法名残留数
+        "placeholder_count": 0,        # 占位符残留数
+        "repeat_count": 0,             # 整句重复数
+        "empty_defects": 0,            # 主要缺陷为空数
+        "empty_suggestions": 0,        # 修改建议为空数
+        "defect_no_number": 0,         # 缺陷无编号数
+        "suggestion_no_number": 0,     # 建议无编号数
+        "no_conclusion": 0,            # 主编缺少最终结论数
+        "cross_dimension_overall": 0,  # 审稿人总体评价维度越界数（写作审稿人出现创新措辞）
+    }
+
+    # 结构解析
+    structure = state.get("paper_structure") or ""
+    if structure:
+        for section in ["## 论文基本信息", "### 1. 引言", "### 5. 结论", "### 6. 参考文献"]:
+            if section not in structure:
+                metrics["structure_missing"] += 1
+    else:
+        metrics["structure_missing"] = 4
+
+    # 4个审稿人
+    review_scores = {}
+    for dim, key in [("创新性", "innovation_review"), ("方法论", "methodology_review"),
+                     ("论证与证据", "experiment_review"), ("写作表达", "writing_review")]:
+        review = state.get(key) or ""
+        for section in REQUIRED_SECTIONS:
+            if section not in review:
+                metrics["review_section_missing"] += 1
+        # 占位符
+        for pattern in PLACEHOLDER_PATTERNS:
+            metrics["placeholder_count"] += len(re.findall(pattern, review))
+        # 整句重复
+        for line in review.split('\n'):
+            if re.search(REPEAT_PATTERN, line):
+                metrics["repeat_count"] += 1
+        # 空缺陷/空建议
+        if re.search(r'\*\*主要缺陷\*\*[：:]\s*\n(\s*)\*\*具体修改建议\*\*[：:]', review):
+            metrics["empty_defects"] += 1
+        if re.search(r'\*\*具体修改建议\*\*[：:]\s*\n(\s*)(?=\n\*\*|\Z)', review):
+            metrics["empty_suggestions"] += 1
+        # 编号条目
+        defects_start = review.find('**主要缺陷**')
+        suggestions_start = review.find('**具体修改建议**')
+        defects_section = review[defects_start:suggestions_start] if suggestions_start > defects_start >= 0 else ''
+        suggestions_section = review[suggestions_start:] if suggestions_start >= 0 else ''
+        if len(re.findall(r'^\d+\.\s', defects_section, re.M)) == 0 and '未发现明显问题' not in defects_section:
+            metrics["defect_no_number"] += 1
+        if len(re.findall(r'^\d+\.\s', suggestions_section, re.M)) == 0 and '未发现明显问题' not in suggestions_section:
+            metrics["suggestion_no_number"] += 1
+        # 评分范围
+        m = re.search(r'\*\*总体评价\*\*[：:]\s*(\d+)/10', review)
+        if m:
+            score = int(m.group(1))
+            if not (1 <= score <= 10):
+                metrics["score_range_errors"] += 1
+            review_scores[dim] = score
+        # 写作审稿人维度越界
+        if dim == "写作表达":
+            m_overall = re.search(r'\*\*总体评价\*\*[：:]\s*(\d+)/10[，,]\s*(.*)', review)
+            if m_overall and re.search(r'创新点不够突出|创新性不足|新颖性不足', m_overall.group(2)):
+                metrics["cross_dimension_overall"] += 1
+
+    # 主编
+    summary = state.get("editor_summary") or ""
+    for section in ["## 二、各维度评分", "## 三、主要优点", "## 四、主要缺陷", "## 五、修改建议清单", "## 六、最终结论"]:
+        if section not in summary:
+            metrics["editor_section_missing"] += 1
+    for pattern in PLACEHOLDER_PATTERNS:
+        metrics["placeholder_count"] += len(re.findall(pattern, summary))
+    # 评分对齐
+    if len(review_scores) == 4:
+        editor_scores = {}
+        dim_map = {"创新性": r'\| 创新性 \|\s*(\d+)', "方法论": r'\| 方法论 \|\s*(\d+)',
+                   "论证与证据": r'\| 论证与证据 \|\s*(\d+)', "写作表达": r'\| 写作表达 \|\s*(\d+)'}
+        for dim, pattern in dim_map.items():
+            m = re.search(pattern, summary)
+            if m:
+                editor_scores[dim] = int(m.group(1))
+        if len(editor_scores) == 4:
+            for dim in review_scores:
+                if review_scores[dim] != editor_scores.get(dim):
+                    metrics["score_align_errors"] += 1
+            total = sum(review_scores.values())
+            m_total = re.search(r'\*\*综合评分\*\*\s*\|\s*\*\*(\d+)/40', summary)
+            if m_total and int(m_total.group(1)) != total:
+                metrics["total_score_errors"] += 1
+    # 最终结论
+    m_conclusion = re.search(r'##\s*六、最终结论\s*\n\s*\*{0,2}([^*\n]+?)\*{0,2}\s*\n', summary)
+    if not m_conclusion:
+        m_conclusion = re.search(r'\*\*最终结论\*\*[：:]\s*\*{0,2}([^*\n]+)', summary)
+    if not m_conclusion:
+        metrics["no_conclusion"] = 1
+
+    # 幻觉残留
+    if paper_text and full_report:
+        paper_norm = _normalize(paper_text)
+        report_norm = _normalize(full_report)
+        for method in SPECIFIC_METHOD_KEYWORDS:
+            method_norm = _normalize(method)
+            if method_norm in paper_norm:
+                continue
+            if method_norm in report_norm:
+                metrics["hallucination_count"] += 1
+
+    return metrics
+
+
+def print_evaluation_summary(all_reports: list) -> None:
+    """
+    系统质量评测汇总：跨论文聚合指标 + 可读表格
+    输出到 stdout，并保存 evaluation_report.json
+    """
+    n = len(all_reports)
+    if n == 0:
+        return
+
+    # 聚合各指标
+    agg = {k: 0 for k in all_reports[0]["metrics"]}
+    issue_types = {}
+    for r in all_reports:
+        for k in agg:
+            agg[k] += r["metrics"][k]
+        for issue in r["issues"]:
+            # 提取问题类型（"  ❌ xxx：yyy" → yyy前的xxx部分）
+            m = re.match(r'\s*[❌⚠️]\s*([^：:]+)：', issue)
+            if m:
+                t = m.group(1).strip()
+                issue_types[t] = issue_types.get(t, 0) + 1
+
+    pass_count = sum(1 for r in all_reports if len(r["issues"]) == 0)
+
+    print(f"\n{'='*60}")
+    print("📈 系统质量评测报告")
+    print(f"{'='*60}")
+    print(f"评测论文数: {n} 篇 | 全过论文: {pass_count} 篇 | 通过率: {pass_count/n*100:.0f}%")
+
+    # 指标表（每篇一行）
+    metric_names = [
+        ("结构缺失", "structure_missing"), ("审稿缺节", "review_section_missing"), ("主编缺节", "editor_section_missing"),
+        ("评分不一致", "score_align_errors"), ("总分算错", "total_score_errors"), ("评分越界", "score_range_errors"),
+        ("幻觉残留", "hallucination_count"), ("占位符", "placeholder_count"), ("重复句", "repeat_count"),
+        ("空缺陷", "empty_defects"), ("空建议", "empty_suggestions"), ("缺结论", "no_conclusion"),
+    ]
+    header = f"{'论文':<8s}" + "".join(f"{name:>8s}" for name, _ in metric_names)
+    print("\n" + header)
+    print("-" * len(header))
+    for r in all_reports:
+        short = os.path.basename(r["paper"])[:6]
+        row = f"{short:<8s}"
+        for name, key in metric_names:
+            row += f"{r['metrics'][key]:>8d}"
+        print(row)
+
+    print("\n聚合指标（总次数）:")
+    for name, key in metric_names:
+        print(f"  {name}: {agg[key]}")
+    print(f"  缺陷无编号: {agg['defect_no_number']} | 建议无编号: {agg['suggestion_no_number']} | 写作越界: {agg['cross_dimension_overall']}")
+
+    if issue_types:
+        print("\n问题类型分布:")
+        for t, c in sorted(issue_types.items(), key=lambda x: -x[1]):
+            print(f"  {t}: {c}")
+
+    # 保存评测报告
+    report_path = os.path.join(_SCRIPT_DIR, "evaluation_report.json")
+    with open(report_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            "papers": len(all_reports),
+            "pass_rate": pass_count / n,
+            "aggregated": agg,
+            "issue_types": issue_types,
+            "per_paper": [{
+                "paper": os.path.basename(r["paper"]),
+                "issues": len(r["issues"]),
+                "metrics": r["metrics"],
+            } for r in all_reports],
+        }, f, ensure_ascii=False, indent=2)
+    print(f"\n评测报告已保存: {report_path}")
 
 
 def check_review_quality(review: str, dimension: str, results: list) -> None:
@@ -269,15 +448,25 @@ def check_structure_quality(state: dict, results: list) -> None:
 
 def run_single_paper(paper_path: str) -> dict:
     """跑一篇论文，返回质量报告"""
-    paper_text = parse_paper(paper_path)
+    parsed = parse_paper(paper_path)
+    paper_text = parsed["text"]
 
     name = os.path.basename(paper_path)
     print(f"\n{'='*60}")
     print(f"📄 正在审稿: {name}")
     print(f"{'='*60}")
+    if parsed.get("parser") == "pdfplumber":
+        print(f"[PDF解析] pdfplumber：文本 {len(paper_text)} 字符，表格 {parsed['tables']} 个，图片 {parsed['images']} 幅")
+    if parsed.get("warning"):
+        print(f"[PDF解析提示] {parsed['warning']}")
 
     # 跑完整审稿
-    state = run_review(paper_text)
+    state = run_review(
+        paper_text,
+        tables_md=parsed.get("tables_md", ""),
+        images=parsed.get("images", 0),
+        tables=parsed.get("tables", 0),
+    )
     results = []
 
     # 生成完整报告并保存（供人工复核）
@@ -296,7 +485,8 @@ def run_single_paper(paper_path: str) -> dict:
     check_editor_quality(state, results)
     # 幻觉方法名残留独立检查（覆盖4审稿人+主编全文）
     check_hallucination_residual(paper_text, full_report, results)
-
+    # 质量指标计算（系统评测用）
+    metrics = compute_metrics(state, paper_text, full_report)
     # 输出结果
     if results:
         print(f"\n⚠️ {name} 发现 {len(results)} 个问题:")
@@ -308,6 +498,7 @@ def run_single_paper(paper_path: str) -> dict:
     return {
         "paper": name,
         "issues": results,
+        "metrics": metrics,
         "state": state,
     }
 
@@ -348,9 +539,12 @@ def main():
     # 保存详细报告
     report_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "quality_report.json")
     with open(report_path, 'w', encoding='utf-8') as f:
-        json.dump([{"paper": r["paper"], "issues": r["issues"]} for r in all_reports],
+        json.dump([{"paper": r["paper"], "issues": r["issues"], "metrics": r["metrics"]} for r in all_reports],
                   f, ensure_ascii=False, indent=2)
     print(f"详细报告已保存: {report_path}")
+
+    # 系统质量评测汇总（指标表 + 聚合 + evaluation_report.json）
+    print_evaluation_summary(all_reports)
 
 
 if __name__ == "__main__":

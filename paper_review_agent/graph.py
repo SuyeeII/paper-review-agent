@@ -76,6 +76,9 @@ def get_graph() -> StateGraph:
 
 def run_review(
     topic: str,
+    tables_md: str = "",
+    images: int = 0,
+    tables: int = 0,
     progress_callback: Optional[Callable[[str, ReviewState], None]] = None,
 ) -> ReviewState:
     """
@@ -83,6 +86,9 @@ def run_review(
 
     Args:
         topic: 论文内容
+        tables_md: 表格 Markdown 文本（pdfplumber 提取，可为空）
+        images: PDF 中图片数量
+        tables: PDF 中表格数量
         progress_callback: 进度回调函数
 
     Returns:
@@ -91,6 +97,9 @@ def run_review(
     # 初始化状态
     state = init_state(
         topic=topic,
+        tables_md=tables_md,
+        images=images,
+        tables=tables,
     )
 
     # 构建并运行图
