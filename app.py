@@ -64,28 +64,15 @@ def parse_paper_file_ui(file_obj) -> str:
         return ""
 
 
-def on_paper_file_upload(file_obj) -> str:
-    """
-    文件上传后，解析论文内容并返回
-    内容存在后台State里，不显示在界面上
-    解析失败时返回空字符串（不把错误提示当论文内容），并在控制台打印原因
-    """
-    parsed = parse_paper_file_ui(file_obj)
-    if not parsed:
-        return ""
-    if parsed.startswith("⚠️"):
-        # 解析失败：打印诊断信息，返回空，避免错误提示被当作论文内容传入审稿流程
-        print(f"[文件解析失败] {parsed}")
-        return ""
-    return parsed
-
-
-def run_review_ui(paper_content: str):
+def run_review_ui(file_obj):
     """
     Gradio 界面的审稿运行函数
+    点击"开始审稿"时当场解析文件（消除上传异步state的竞态问题）
     4个维度审稿人并行评审 → 主编汇总
     返回：论文结构解析、4个维度审稿意见、主编报告、导出文件、状态
     """
+    # 当场解析文件（不再依赖上传时的异步 state）
+    paper_content = parse_paper_file_ui(file_obj)
     if not paper_content or not paper_content.strip():
         reason = _last_parse_error if _last_parse_error else "未上传文件或文件解析失败"
         yield f"❌ 未获取到论文内容。原因：{reason}。若是扫描件/图片型 PDF，请先转成可复制文字的 PDF（或用 OCR 工具提取文本）后再上传。", "", "", "", "", "", "", None, "❌ 未获取到论文内容"
@@ -160,16 +147,10 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
     """)
 
     # ===== 输入区（只保留文件上传，去掉手动输入框）=====
-    paper_content_state = gr.State("")  # 后台保存解析后的论文文本
     paper_file_input = gr.File(
         label="📄 上传论文文件（PDF / TXT / MD，必填）",
         file_count="single",
         file_types=[".pdf", ".txt", ".md"],
-    )
-    paper_file_input.change(
-        fn=on_paper_file_upload,
-        inputs=[paper_file_input],
-        outputs=[paper_content_state],
     )
 
     # 开始审稿按钮占满整行，状态显示在按钮下方
@@ -204,10 +185,10 @@ with gr.Blocks(title="论文多视角审稿助手") as demo:
     with gr.Row():
         export_file = gr.File(label="📥 导出审稿报告（Markdown，审稿完成后可下载）", interactive=False)
 
-    # 事件绑定
+    # 事件绑定：点击时当场解析文件并审稿（消除上传异步state竞态）
     run_button.click(
         fn=run_review_ui,
-        inputs=[paper_content_state],
+        inputs=[paper_file_input],
         outputs=[structure_md, innovation_md, methodology_md, experiment_md, writing_md,
                  summary_md, full_text_box, export_file, status_text],
     )
